@@ -38,6 +38,14 @@
       <input type="checkbox" class="form-check-input" id="extra_table" {% if extra_table %}checked{% endif %}>
       <label class="form-check-label" for="extra_table">Extra Table</label>
     </div>
+    <div class="form-check mb-2">
+      <input type="checkbox" class="form-check-input" id="second_match" {% if second_match %}checked{% endif %}>
+      <label class="form-check-label" for="second_match">Second Match (2 tables)</label>
+    </div>
+    <div class="form-check mb-2">
+      <input type="checkbox" class="form-check-input" id="second_match_extra_table" {% if second_match_extra_table %}checked{% endif %}>
+      <label class="form-check-label" for="second_match_extra_table">Extra Table for Second Match</label>
+    </div>
   </div>
 </div>
 {% endif %}
@@ -128,7 +136,6 @@ document.addEventListener("DOMContentLoaded", ()=>{
   const endSelect=document.getElementById("end");
   const matchDayNotice=document.getElementById("matchDayNotice");
   const dayInput=document.getElementById("day");
-  const isAdmin={{ 'true' if is_admin else 'false' }};
 
   function populatePartners(){
     const selected=playerSelect.value;
@@ -163,7 +170,7 @@ document.addEventListener("DOMContentLoaded", ()=>{
     const today = now.toISOString().split('T')[0];
     const currentTime = now.toTimeString().slice(0,5);
     slots.forEach(t=>{
-      if(!isAdmin && dayInput.value===today && t<=currentTime) return; // disable past
+      if(dayInput.value===today && t<=currentTime) return; // disable past
       startSelect.append(new Option(t,t));
     });
   }
@@ -190,29 +197,28 @@ document.addEventListener("DOMContentLoaded", ()=>{
   }
 
   async function loadBookings(){
-  const res=await fetch("/bookings");
-  const bookings=await res.json();
-  const div=document.getElementById("bookings");
-  div.innerHTML="";
-  if(bookings.length===0){div.innerHTML="<p class='text-center text-muted'>No bookings yet</p>";return;}
-  bookings.forEach(b=>{
-    const card=document.createElement("div");
-    card.className="card p-2 mb-2 shadow-sm";
-    let buttons="";
-    if(b.status==="booked") buttons+=`<button class="btn btn-success btn-sm me-2" onclick="checkin(${b.booking_id})">Check-in</button>`;
-    if(b.status==="checked-in") buttons+=`<button class="btn btn-warning btn-sm me-2" onclick="checkout(${b.booking_id})">Checkout</button>`;
-    {% if is_admin %}
-    buttons+=`<button class="btn btn-danger btn-sm" onclick="deleteBooking(${b.booking_id})">Delete</button>`;
-    {% endif %}
-    card.innerHTML=`
-      <div><b>${b.player}</b>${b.partner?" + "+b.partner:""}</div>
-      <div>${b.day} | ${b.start}–${b.end}</div>
-      <div>Status: <b>${b.status}</b></div>
-      <div class="mt-2">${buttons}</div>`;
-    div.appendChild(card);
-  });
-}
-
+    const res=await fetch("/bookings");
+    const bookings=await res.json();
+    const div=document.getElementById("bookings");
+    div.innerHTML="";
+    if(bookings.length===0){div.innerHTML="<p class='text-center text-muted'>No bookings yet</p>";return;}
+    bookings.forEach(b=>{
+      const card=document.createElement("div");
+      card.className="card p-2 mb-2 shadow-sm";
+      let buttons="";
+      if(b.status==="booked") buttons+=`<button class="btn btn-success btn-sm me-2" onclick="checkin(${b.booking_id})">Check-in</button>`;
+      if(b.status==="checked-in") buttons+=`<button class="btn btn-warning btn-sm me-2" onclick="checkout(${b.booking_id})">Checkout</button>`;
+      {% if is_admin %}
+      buttons+=`<button class="btn btn-danger btn-sm" onclick="deleteBooking(${b.booking_id})">Delete</button>`;
+      {% endif %}
+      card.innerHTML=`
+        <div><b>${b.player}</b>${b.partner?" + "+b.partner:""}</div>
+        <div>${b.day} | ${b.start}–${b.end}</div>
+        <div>Status: <b>${b.status}</b></div>
+        <div class="mt-2">${buttons}</div>`;
+      div.appendChild(card);
+    });
+  }
 
   function showUserPopup(){
     const modal = new bootstrap.Modal(document.getElementById('userPopup'));
@@ -242,14 +248,46 @@ document.addEventListener("DOMContentLoaded", ()=>{
   {% if is_admin %}
   const matchCheck=document.getElementById("match_day");
   const extraCheck=document.getElementById("extra_table");
-  matchCheck.addEventListener("change", async ()=>{
-    await fetch("/update-settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({match_day:matchCheck.checked,extra_table:extraCheck.checked})});
-    await loadOccupancy();
+  const second_matchCheck=document.getElementById("second_match");
+  const second_match_extra_tableCheck=document.getElementById("second_match_extra_table");
+
+  function updateCheckboxState() {
+      const enabled = matchCheck.checked;
+      extraCheck.disabled = !enabled;
+      second_matchCheck.disabled = !enabled;
+      second_match_extra_tableCheck.disabled = !enabled;
+
+      if (!enabled) {
+          extraCheck.checked = false;
+          second_matchCheck.checked = false;
+          second_match_extra_tableCheck.checked = false;
+      }
+  }
+
+  async function updateSettings() {
+      await fetch("/update-settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+              match_day: matchCheck.checked,
+              extra_table: extraCheck.checked,
+              second_match: second_matchCheck.checked,
+              second_match_extra_table: second_match_extra_tableCheck.checked
+          })
+      });
+      await loadOccupancy();
+  }
+
+  // initial state
+  updateCheckboxState();
+
+  matchCheck.addEventListener("change", ()=>{
+      updateCheckboxState();
+      updateSettings();
   });
-  extraCheck.addEventListener("change", async ()=>{
-    await fetch("/update-settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({match_day:matchCheck.checked,extra_table:extraCheck.checked})});
-    await loadOccupancy();
-  });
+  extraCheck.addEventListener("change", updateSettings);
+  second_matchCheck.addEventListener("change", updateSettings);
+  second_match_extra_tableCheck.addEventListener("change", updateSettings);
   {% endif %}
 
   loadBookings();

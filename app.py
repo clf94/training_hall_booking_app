@@ -28,6 +28,8 @@ class Settings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     match_day = db.Column(db.Boolean, default=False)
     extra_table = db.Column(db.Boolean, default=False)
+    second_match = db.Column(db.Boolean, default=False)
+    second_match_extra_table = db.Column(db.Boolean, default=False)
 
 users = [
     "Albus, Lennart","Angelini, Giacomo","Bamil, Aradhya","Basu, Soumya","Batinic, Danijel",
@@ -62,7 +64,9 @@ def index():
         date=date.today(),
         is_admin=session.get('is_admin', False),
         match_day=settings.match_day if settings else False,
-        extra_table=settings.extra_table if settings else False
+        extra_table=settings.extra_table if settings else False,
+        second_match=settings.second_match if settings else False,
+        second_matchextra_table=settings.second_match_extra_table if settings else False
     )
 
 @app.route("/admin-login", methods=["GET", "POST"])
@@ -108,6 +112,10 @@ def occupancy():
             occupied += 4
             match_day = True
         if settings.extra_table:
+            occupied += 2
+        if settings.second_match:
+            occupied += 4
+        if settings.second_match_extra_table:
             occupied += 2
     return jsonify({"occupied": occupied, "capacity": 12, "match_day": match_day})
 
@@ -179,13 +187,18 @@ def update_settings():
         return "Unauthorized", 401
     match_day = request.json.get("match_day", False)
     extra_table = request.json.get("extra_table", False)
+    second_match = request.json.get("second_match", False)
+    second_match_extra_table = request.json.get("second_match_extra_table", False)
     settings = Settings.query.first()
     settings.match_day = match_day
     settings.extra_table = extra_table
+    settings.second_match=second_match
+    settings.second_match_extra_table=second_match_extra_table
     db.session.commit()
     return "", 204
 
 if __name__ == "__main__":
     with app.app_context():
+        db.drop_all()
         db.create_all()
     app.run(host="0.0.0.0", port=5009, debug=True)
