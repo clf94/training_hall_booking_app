@@ -10,14 +10,37 @@
 .occupancy-green { color: green; }
 .occupancy-yellow { color: goldenrod; }
 .occupancy-red { color: red; }
-.logo { max-height: 60px; margin-bottom: 20px; }
+.logo { max-height:60px;margin-bottom:20px; }
+.admin-section { margin-bottom:20px; }
 </style>
 </head>
 <body class="bg-light">
+
 <div class="container my-4 text-center">
-  <img src="/static/logo.png" alt="TTC Logo" class="logo">
+  <img src="/static/logo.png" class="logo">
   <h1>Tischtennisclub Zürich Affoltern</h1>
+  {% if not is_admin %}
+  <a href="{{ url_for('admin_login') }}" class="btn btn-warning mt-2">Admin Login</a>
+  {% else %}
+  <a href="{{ url_for('admin_logout') }}" class="btn btn-danger mt-2">Admin Logout</a>
+  {% endif %}
 </div>
+
+{% if is_admin %}
+<div class="container admin-section">
+  <div class="card p-3 shadow-sm">
+    <h5>Admin Section</h5>
+    <div class="form-check mb-2">
+      <input type="checkbox" class="form-check-input" id="match_day" {% if match_day %}checked{% endif %}>
+      <label class="form-check-label" for="match_day">Match Day (2 tables = 4 occupancy)</label>
+    </div>
+    <div class="form-check mb-2">
+      <input type="checkbox" class="form-check-input" id="extra_table" {% if extra_table %}checked{% endif %}>
+      <label class="form-check-label" for="extra_table">Extra Table (+2 occupancy)</label>
+    </div>
+  </div>
+</div>
+{% endif %}
 
 <div class="container my-4">
   <div class="row justify-content-center">
@@ -25,6 +48,7 @@
       <div class="card text-center p-3 shadow-sm">
         <h5>Live Occupancy</h5>
         <div id="occupancyValue" class="fs-3 fw-bold occupancy-green">0 / 12</div>
+        <div id="matchDayNotice" class="text-center text-primary fw-bold" style="display:none;">Match Day!</div>
       </div>
     </div>
 
@@ -33,50 +57,40 @@
         <h5 class="mb-3">Book a Session</h5>
         <form id="bookingForm">
           <div class="mb-2">
-            <label class="form-label">Player</label>
+            <label>Player</label>
             <select id="player" name="player" class="form-select" required>
               <option value="">-- Select player --</option>
-              {% for u in users %}
-              <option value="{{ u }}">{{ u }}</option>
-              {% endfor %}
-              <option value="Other">Other</option>
+              {% for u in users %}<option value="{{ u }}">{{ u }}</option>{% endfor %}
+              <option value="other">Other</option>
             </select>
-            <input type="text" id="player_external" name="player_external" class="form-control mt-1" placeholder="Enter player name" style="display:none;">
+            <input type="text" id="player_external" placeholder="Enter player name" class="form-control mt-1" style="display:none;">
           </div>
 
           <div class="mb-2">
-            <label class="form-label">Partner (optional)</label>
-            <select id="partner" name="partner" class="form-select"></select>
-            <input type="text" id="partner_external" name="partner_external" class="form-control mt-1" placeholder="Enter partner name" style="display:none;">
+            <label>Partner</label>
+            <select id="partner" name="partner" class="form-select">
+              <option value="">-- None --</option>
+              {% for u in users %}<option value="{{ u }}">{{ u }}</option>{% endfor %}
+              <option value="other">Other</option>
+            </select>
+            <input type="text" id="partner_external" placeholder="Enter partner name" class="form-control mt-1" style="display:none;">
           </div>
 
           <div class="mb-2">
-            <label class="form-label">Day</label>
+            <label>Day</label>
             <input type="date" id="day" name="day" class="form-control" value="{{ date.isoformat() }}" readonly required>
           </div>
 
           <div class="mb-2">
-            <label class="form-label">Start Time</label>
+            <label>Start Time</label>
             <select id="start" name="start" class="form-select" required></select>
           </div>
-
           <div class="mb-3">
-            <label class="form-label">End Time</label>
+            <label>End Time</label>
             <select id="end" name="end" class="form-select" required></select>
           </div>
-
           <button type="submit" class="btn btn-primary w-100">Book</button>
         </form>
-
-        <hr>
-        <div class="form-check">
-          <input type="checkbox" class="form-check-input" id="matchDayCheckbox">
-          <label class="form-check-label" for="matchDayCheckbox">Match Day (+4 occupancy)</label>
-        </div>
-        <div class="form-check mt-1">
-          <input type="checkbox" class="form-check-input" id="extraTableMatch" disabled>
-          <label class="form-check-label" for="extraTableMatch">Extra Table (+2)</label>
-        </div>
       </div>
     </div>
   </div>
@@ -87,177 +101,106 @@
 <div id="bookings" class="container mb-5"></div>
 
 <script>
-document.addEventListener("DOMContentLoaded", () => {
-  const playerSelect = document.getElementById("player");
-  const partnerSelect = document.getElementById("partner");
-  const startSelect = document.getElementById("start");
-  const endSelect = document.getElementById("end");
-  const playerExternal = document.getElementById("player_external");
-  const partnerExternal = document.getElementById("partner_external");
-  const matchDayCheckbox = document.getElementById("matchDayCheckbox");
-  const extraTableCheckbox = document.getElementById("extraTableMatch");
+document.addEventListener("DOMContentLoaded", ()=>{
+  const playerSelect=document.getElementById("player");
+  const partnerSelect=document.getElementById("partner");
+  const playerExternal=document.getElementById("player_external");
+  const partnerExternal=document.getElementById("partner_external");
+  const startSelect=document.getElementById("start");
+  const endSelect=document.getElementById("end");
+  const matchDayNotice=document.getElementById("matchDayNotice");
 
-  // Populate partner dropdown excluding selected player
-  function updatePartnerOptions() {
-    const selected = playerSelect.value;
-    partnerSelect.innerHTML = '<option value="">-- None --</option>';
+  function populatePartners(){
+    const selected=playerSelect.value;
+    partnerSelect.innerHTML='<option value="">-- None --</option>';
     {% for u in users %}
-      if ("{{ u }}" !== selected) {
-        const o = document.createElement("option");
-        o.value = "{{ u }}";
-        o.textContent = "{{ u }}";
-        partnerSelect.appendChild(o);
-      }
+      if("{{ u }}"!==selected) partnerSelect.innerHTML+=`<option value="{{ u }}">{{ u }}</option>`;
     {% endfor %}
-    partnerSelect.innerHTML += '<option value="Other">Other</option>';
-    partnerExternal.style.display = 'none';
+    partnerSelect.innerHTML+='<option value="other">Other</option>';
   }
 
-  playerSelect.addEventListener("change", () => {
-    if (playerSelect.value === "Other") {
-      playerExternal.style.display = 'block';
-    } else {
-      playerExternal.style.display = 'none';
-    }
-    updatePartnerOptions();
+  playerSelect.addEventListener("change", ()=>{
+    playerExternal.style.display=playerSelect.value=="other"?"block":"none";
+    populatePartners();
+  });
+  partnerSelect.addEventListener("change", ()=>{
+    partnerExternal.style.display=partnerSelect.value=="other"?"block":"none";
   });
 
-  partnerSelect.addEventListener("change", () => {
-    partnerExternal.style.display = partnerSelect.value === "Other" ? 'block' : 'none';
-  });
-
-  // Time slots 19:30 → 22:15 every 15 min
-  const slots = [];
-  let base = new Date();
-  base.setHours(19, 30, 0, 0);
-  for(let i=0; i<=11; i++){
-    const t = new Date(base.getTime()+i*15*60000);
-    const hh = t.getHours().toString().padStart(2,'0');
-    const mm = t.getMinutes().toString().padStart(2,'0');
-    slots.push(`${hh}:${mm}`);
+  const slots=[];
+  let base=new Date(); base.setHours(19,30,0,0);
+  for(let i=0;i<=11;i++){
+    const t=new Date(base.getTime()+i*15*60000);
+    const time=t.toTimeString().slice(0,5);
+    slots.push(time);
+    startSelect.append(new Option(time,time));
   }
-  slots.forEach(time=>{
-    const o=document.createElement("option");
-    o.value=time; o.textContent=time;
-    startSelect.appendChild(o);
-  });
-
-  function updateEnd() {
-    endSelect.innerHTML='';
-    const idx=startSelect.selectedIndex;
-    for(let i=idx+1;i<slots.length;i++){
-      const o=document.createElement("option");
-      o.value = slots[i]; o.textContent = slots[i];
-      endSelect.appendChild(o);
-    }
-  }
+  function updateEnd(){endSelect.innerHTML="";for(let i=startSelect.selectedIndex+1;i<slots.length;i++) endSelect.append(new Option(slots[i],slots[i]));}
   startSelect.addEventListener("change", updateEnd);
   updateEnd();
 
-  async function loadOccupancy() {
-    const res = await fetch("/occupancy");
-    const j = await res.json();
-    const el = document.getElementById("occupancyValue");
-    el.textContent = `${j.occupied} / ${j.capacity}`;
-    el.className = "fs-3 fw-bold " +
-      (j.occupied < 6 ? "occupancy-green" :
-       j.occupied < 11 ? "occupancy-yellow" : "occupancy-red");
+  async function loadOccupancy(){
+    const res=await fetch("/occupancy");
+    const j=await res.json();
+    const el=document.getElementById("occupancyValue");
+    el.textContent=`${j.occupied} / ${j.capacity}`;
+    el.className="fs-3 fw-bold "+(j.occupied<6?"occupancy-green":j.occupied<11?"occupancy-yellow":"occupancy-red");
+    matchDayNotice.style.display=j.match_day?"block":"none";
   }
 
-  async function loadBookings() {
-    const res = await fetch("/bookings", { headers: { "Accept":"application/json" } });
-    const bookings = await res.json();
-    const div = document.getElementById("bookings");
-    div.innerHTML = "";
-    if(bookings.length === 0){
-      div.innerHTML = "<p class='text-center text-muted'>No bookings yet</p>";
-      return;
-    }
-
-    bookings.forEach(b => {
-      const card = document.createElement("div");
-      card.className = "card p-2 mb-2 shadow-sm";
-      let buttons = "";
-      if(b.status === "booked") buttons += `<button class="btn btn-success btn-sm me-2" onclick="checkin(${b.booking_id})">Check-in</button>`;
-      if(b.status === "checked-in") buttons += `<button class="btn btn-warning btn-sm me-2" onclick="checkout(${b.booking_id})">Checkout</button>`;
-      buttons += `<button class="btn btn-danger btn-sm" onclick="deleteBooking(${b.booking_id})">Delete</button>`;
-
-      card.innerHTML = `
-        <div><b>${b.player}</b>${b.partner ? " + " + b.partner : ""}</div>
+  async function loadBookings(){
+    const res=await fetch("/bookings");
+    const bookings=await res.json();
+    const div=document.getElementById("bookings");
+    div.innerHTML="";
+    if(bookings.length===0){div.innerHTML="<p class='text-center text-muted'>No bookings yet</p>";return;}
+    bookings.forEach(b=>{
+      const card=document.createElement("div");
+      card.className="card p-2 mb-2 shadow-sm";
+      let buttons="";
+      if(b.status==="booked") buttons+=`<button class="btn btn-success btn-sm me-2" onclick="checkin(${b.booking_id})">Check-in</button>`;
+      if(b.status==="checked-in") buttons+=`<button class="btn btn-warning btn-sm me-2" onclick="checkout(${b.booking_id})">Checkout</button>`;
+      {% if is_admin %}
+      buttons+=`<button class="btn btn-danger btn-sm" onclick="deleteBooking(${b.booking_id})">Delete</button>`;
+      {% endif %}
+      card.innerHTML=`
+        <div><b>${b.player}</b>${b.partner?" + "+b.partner:""}</div>
         <div>${b.day} | ${b.start}–${b.end}</div>
         <div>Status: <b>${b.status}</b></div>
-        <div class="mt-2">${buttons}</div>
-      `;
+        <div class="mt-2">${buttons}</div>`;
       div.appendChild(card);
     });
   }
 
-  document.getElementById("bookingForm").addEventListener("submit", async e => {
+  document.getElementById("bookingForm").addEventListener("submit", async e=>{
     e.preventDefault();
-    const data = new FormData(e.target);
-    const resp = await fetch("/book", { method:"POST", body:data });
-    const j = await resp.json();
-    if(j.ok){
-      e.target.reset();
-      updatePartnerOptions();
-      await loadBookings();
-    } else {
-      alert(j.error);
-    }
+    const data=new FormData(e.target);
+    const resp=await fetch("/book",{method:"POST",body:data});
+    const j=await resp.json();
+    if(j.ok){e.target.reset();playerExternal.style.display="none";partnerExternal.style.display="none";await loadBookings();}
+    else alert(j.error);
   });
 
-  matchDayCheckbox.addEventListener("change", async () => {
-    extraTableCheckbox.disabled = !matchDayCheckbox.checked;
-    await fetch("/matchday", {
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({day: matchDayCheckbox.checked, extraTable: extraTableCheckbox.checked})
-    });
-    loadOccupancy();
+  window.checkin=async id=>{await fetch("/checkin",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({booking_id:id})});await loadBookings();await loadOccupancy();}
+  window.checkout=async id=>{await fetch("/checkout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({booking_id:id})});await loadBookings();await loadOccupancy();}
+  window.deleteBooking=async id=>{await fetch("/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({booking_id:id})});await loadBookings();await loadOccupancy();}
+
+  {% if is_admin %}
+  const matchCheck=document.getElementById("match_day");
+  const extraCheck=document.getElementById("extra_table");
+  matchCheck.addEventListener("change", async ()=>{
+    await fetch("/update-settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({match_day:matchCheck.checked,extra_table:extraCheck.checked})});
+    await loadOccupancy();
   });
-
-  extraTableCheckbox.addEventListener("change", async () => {
-    await fetch("/matchday", {
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({day: matchDayCheckbox.checked, extraTable: extraTableCheckbox.checked})
-    });
-    loadOccupancy();
+  extraCheck.addEventListener("change", async ()=>{
+    await fetch("/update-settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({match_day:matchCheck.checked,extra_table:extraCheck.checked})});
+    await loadOccupancy();
   });
-
-  window.checkin = async id => {
-    await fetch("/checkin", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ booking_id: id })
-    });
-    await loadBookings();
-    await loadOccupancy();
-  };
-
-  window.checkout = async id => {
-    await fetch("/checkout", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ booking_id: id })
-    });
-    await loadBookings();
-    await loadOccupancy();
-  };
-
-  window.deleteBooking = async id => {
-    await fetch("/delete", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ booking_id: id })
-    });
-    await loadBookings();
-    await loadOccupancy();
-  };
+  {% endif %}
 
   loadBookings();
   loadOccupancy();
-  setInterval(loadOccupancy, 5000);
+  setInterval(loadOccupancy,5000);
 });
 </script>
 </body>
