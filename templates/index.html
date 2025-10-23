@@ -32,11 +32,11 @@
     <h5>Admin Section</h5>
     <div class="form-check mb-2">
       <input type="checkbox" class="form-check-input" id="match_day" {% if match_day %}checked{% endif %}>
-      <label class="form-check-label" for="match_day">Match Day (2 tables = 4 occupancy)</label>
+      <label class="form-check-label" for="match_day">Match Day (2 tables)</label>
     </div>
     <div class="form-check mb-2">
       <input type="checkbox" class="form-check-input" id="extra_table" {% if extra_table %}checked{% endif %}>
-      <label class="form-check-label" for="extra_table">Extra Table (+2 occupancy)</label>
+      <label class="form-check-label" for="extra_table">Extra Table</label>
     </div>
   </div>
 </div>
@@ -127,17 +127,34 @@ document.addEventListener("DOMContentLoaded", ()=>{
     partnerExternal.style.display=partnerSelect.value=="other"?"block":"none";
   });
 
-  const slots=[];
-  let base=new Date(); base.setHours(19,30,0,0);
-  for(let i=0;i<=11;i++){
-    const t=new Date(base.getTime()+i*15*60000);
-    const time=t.toTimeString().slice(0,5);
+const slots = [];
+let base = new Date();
+base.setHours(8, 0, 0, 0);
+
+// 1. Generate ALL 61 slots (0 to 60) and push them to the 'slots' array.
+// (Assuming 60 iterations was the intent, 0 to 60 is 61 total slots)
+for (let i = 0; i <= 60; i++) {
+    const t = new Date(base.getTime() + i * 15 * 60000);
+    const time = t.toTimeString().slice(0, 5);
     slots.push(time);
-    startSelect.append(new Option(time,time));
-  }
-  function updateEnd(){endSelect.innerHTML="";for(let i=startSelect.selectedIndex+1;i<slots.length;i++) endSelect.append(new Option(slots[i],slots[i]));}
-  startSelect.addEventListener("change", updateEnd);
-  updateEnd();
+}
+
+// 2. Populate startSelect, stopping BEFORE the very last slot.
+// This ensures the end time always has at least one option (the final slot).
+for (let i = 0; i < slots.length - 1; i++) {
+    startSelect.append(new Option(slots[i], slots[i]));
+}
+
+function updateEnd() {
+    endSelect.innerHTML = "";
+    // The loop correctly starts at the index AFTER the selected start time.
+    for (let i = startSelect.selectedIndex + 1; i < slots.length; i++) {
+        endSelect.append(new Option(slots[i], slots[i]));
+    }
+}
+
+startSelect.addEventListener("change", updateEnd);
+updateEnd();
 
   async function loadOccupancy(){
     const res=await fetch("/occupancy");
