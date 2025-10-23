@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Training Hall Booking</title>
-<link rel="icon" href="/static/logo.png">
+<link rel="icon" type="image/png" href="/static/logo.png">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 <style>
 .occupancy-green { color: green; }
@@ -20,64 +20,58 @@
 </div>
 
 <div class="container my-4">
-<div class="row justify-content-center">
-<div class="col-md-4 col-sm-12 mb-3">
-<div class="card text-center p-3 shadow-sm">
-<h5>Live Occupancy</h5>
-<div id="occupancyValue" class="fs-3 fw-bold occupancy-green">0 / 12</div>
-</div>
-</div>
+  <div class="row justify-content-center">
+    <div class="col-md-4 col-sm-12 mb-3">
+      <div class="card text-center p-3 shadow-sm">
+        <h5>Live Occupancy</h5>
+        <div id="occupancyValue" class="fs-3 fw-bold occupancy-green">0 / 12</div>
+      </div>
+    </div>
 
-<div class="col-md-8 col-sm-12">
-<div class="card p-3 shadow-sm">
-<h5 class="mb-3">Book a Session</h5>
-<form id="bookingForm">
-<div class="mb-2">
-<label class="form-label">Player</label>
-<select id="player" name="player" class="form-select" required>
-  <option value="">-- Select player --</option>
-  {% for u in users %}
-  <option value="{{ u }}">{{ u }}</option>
-  {% endfor %}
-</select>
-</div>
+    <div class="col-md-8 col-sm-12">
+      <div class="card p-3 shadow-sm">
+        <h5 class="mb-3">Book a Session</h5>
+        <form id="bookingForm">
+          <div class="mb-2">
+            <label class="form-label">Player</label>
+            <select id="player" name="player" class="form-select" required>
+              <option value="">-- Select player --</option>
+              {% for u in users %}<option value="{{ u }}">{{ u }}</option>{% endfor %}
+              <option value="Other">Other</option>
+            </select>
+            <input type="text" id="player_external" placeholder="Enter player name" class="form-control mt-2 d-none" name="player_external">
+          </div>
 
-<div class="mb-2">
-<label class="form-label">Partner</label>
-<select id="partner" name="partner" class="form-select">
-  <option value="">-- None --</option>
-  {% for u in users %}
-  <option value="{{ u }}">{{ u }}</option>
-  {% endfor %}
-  <option value="other">Other</option>
-</select>
-</div>
+          <div class="mb-2">
+            <label class="form-label">Partner (optional)</label>
+            <select id="partner" name="partner" class="form-select">
+              <option value="">-- None --</option>
+              {% for u in users %}<option value="{{ u }}">{{ u }}</option>{% endfor %}
+              <option value="Other">Other</option>
+            </select>
+            <input type="text" id="partner_external" placeholder="Enter partner name" class="form-control mt-2 d-none" name="partner_external">
+          </div>
 
-<div class="mb-2" id="partnerExternalDiv" style="display:none;">
-<label class="form-label">Partner Name (External)</label>
-<input type="text" id="partner_external" name="partner_external" class="form-control" placeholder="Type external name">
-</div>
+          <div class="mb-2">
+            <label class="form-label">Day</label>
+            <input type="date" id="day" name="day" class="form-control" value="{{ date.isoformat() }}" readonly required>
+          </div>
 
-<div class="mb-2">
-<label class="form-label">Day</label>
-<input type="date" id="day" name="day" class="form-control" value="{{ date.isoformat() }}" readonly required>
-</div>
+          <div class="mb-2">
+            <label class="form-label">Start Time</label>
+            <select id="start" name="start" class="form-select" required></select>
+          </div>
 
-<div class="mb-2">
-<label class="form-label">Start Time</label>
-<select id="start" name="start" class="form-select" required></select>
-</div>
+          <div class="mb-3">
+            <label class="form-label">End Time</label>
+            <select id="end" name="end" class="form-select" required></select>
+          </div>
 
-<div class="mb-3">
-<label class="form-label">End Time</label>
-<select id="end" name="end" class="form-select" required></select>
-</div>
-
-<button type="submit" class="btn btn-primary w-100">Book</button>
-</form>
-</div>
-</div>
-</div>
+          <button type="submit" class="btn btn-primary w-100">Book</button>
+        </form>
+      </div>
+    </div>
+  </div>
 </div>
 
 <hr>
@@ -86,92 +80,94 @@
 
 <script>
 document.addEventListener("DOMContentLoaded", () => {
-const playerSelect = document.getElementById("player");
-const partnerSelect = document.getElementById("partner");
-const partnerExternalDiv = document.getElementById("partnerExternalDiv");
-const partnerExternal = document.getElementById("partner_external");
-const startSelect = document.getElementById("start");
-const endSelect = document.getElementById("end");
+  const playerSelect = document.getElementById("player");
+  const partnerSelect = document.getElementById("partner");
+  const startSelect = document.getElementById("start");
+  const endSelect = document.getElementById("end");
+  const playerExternal = document.getElementById("player_external");
+  const partnerExternal = document.getElementById("partner_external");
 
-// Populate partner dropdown excluding player
-function updatePartnerOptions() {
-  const selectedPlayer = playerSelect.value;
-  partnerSelect.innerHTML = '<option value="">-- None --</option>';
-  {% for u in users %}
-  if ("{{ u }}" !== selectedPlayer) {
+  function updateExternalField(select, input) {
+    select.addEventListener("change", () => {
+      if (select.value === "Other") input.classList.remove("d-none");
+      else input.classList.add("d-none");
+      // prevent selecting same as player
+      if (select === partnerSelect && select.value === playerSelect.value) select.value = "";
+    });
+  }
+
+  updateExternalField(playerSelect, playerExternal);
+  updateExternalField(partnerSelect, partnerExternal);
+
+  // Populate time slots every 15 minutes from 19:30 to 22:15
+  const slots = [];
+  let base = new Date();
+  base.setHours(19,30,0,0);
+  while (base.getHours()<22 || (base.getHours()===22 && base.getMinutes()<=15)) {
+    slots.push(base.toTimeString().slice(0,5));
+    base = new Date(base.getTime()+15*60000);
+  }
+  slots.forEach(time => {
     const o = document.createElement("option");
-    o.value="{{ u }}"; o.textContent="{{ u }}";
-    partnerSelect.appendChild(o);
-  }
-  {% endfor %}
-  const otherOption = document.createElement("option");
-  otherOption.value="other"; otherOption.textContent="Other";
-  partnerSelect.appendChild(otherOption);
-  partnerExternalDiv.style.display="none"; partnerExternal.value="";
-}
-
-playerSelect.addEventListener("change", updatePartnerOptions);
-
-partnerSelect.addEventListener("change", ()=>{
-  if(partnerSelect.value==="other"){ partnerExternalDiv.style.display="block"; }
-  else{ partnerExternalDiv.style.display="none"; partnerExternal.value=""; }
-});
-
-// Time slots 15-min from 19:30 → 22:15
-const slots=[]; let base=new Date(); base.setHours(19,30,0,0);
-for(let i=0;i<=11;i++){ const t=new Date(base.getTime()+i*15*60000); slots.push(t.toTimeString().slice(0,5)); }
-slots.forEach(time=>{ const o=document.createElement("option"); o.value=time; o.textContent=time; startSelect.appendChild(o); });
-
-function updateEnd() {
-  endSelect.innerHTML="";
-  const idx=startSelect.selectedIndex;
-  for(let i=idx+1;i<slots.length;i++){
-    const o=document.createElement("option"); o.value=slots[i]; o.textContent=slots[i]; endSelect.appendChild(o);
-  }
-}
-startSelect.addEventListener("change", updateEnd);
-updateEnd();
-
-// Load occupancy & bookings
-async function loadOccupancy(){
-  const res=await fetch("/occupancy"); const j=await res.json();
-  const el=document.getElementById("occupancyValue");
-  el.textContent=`${j.occupied} / ${j.capacity}`;
-  el.className="fs-3 fw-bold "+(j.occupied<6?"occupancy-green":(j.occupied<11?"occupancy-yellow":"occupancy-red"));
-}
-
-async function loadBookings(){
-  const res=await fetch("/bookings",{headers:{"Accept":"application/json"}}); const bookings=await res.json();
-  const div=document.getElementById("bookings"); div.innerHTML="";
-  if(bookings.length===0){ div.innerHTML="<p class='text-center text-muted'>No bookings yet</p>"; return; }
-  bookings.forEach(b=>{
-    const card=document.createElement("div"); card.className="card p-2 mb-2 shadow-sm";
-    let buttons="";
-    if(b.status==="booked") buttons+=`<button class="btn btn-success btn-sm me-2" onclick="checkin(${b.booking_id})">Check-in</button>`;
-    if(b.status==="checked-in") buttons+=`<button class="btn btn-warning btn-sm me-2" onclick="checkout(${b.booking_id})">Checkout</button>`;
-    buttons+=`<button class="btn btn-danger btn-sm" onclick="deleteBooking(${b.booking_id})">Delete</button>`;
-    card.innerHTML=`<div><b>${b.player}</b>${b.partner?" + "+b.partner:""}</div>
-      <div>${b.day} | ${b.start}–${b.end}</div>
-      <div>Status: <b>${b.status}</b></div>
-      <div class="mt-2">${buttons}</div>`;
-    div.appendChild(card);
+    o.value = o.textContent = time;
+    startSelect.appendChild(o);
   });
-}
 
-document.getElementById("bookingForm").addEventListener("submit", async e=>{
-  e.preventDefault();
-  const data=new FormData(e.target);
-  const resp=await fetch("/book",{method:"POST",body:data});
-  const j=await resp.json();
-  if(j.ok){ e.target.reset(); partnerExternalDiv.style.display="none"; partnerExternal.value=""; await loadBookings(); }
-  else{ alert(j.error); }
-});
+  function updateEnd() {
+    endSelect.innerHTML='';
+    const idx=startSelect.selectedIndex;
+    for(let i=idx+1;i<slots.length;i++){
+      const o = document.createElement("option");
+      o.value = o.textContent = slots[i];
+      endSelect.appendChild(o);
+    }
+  }
+  startSelect.addEventListener("change", updateEnd);
+  updateEnd();
 
-window.checkin=async id=>{ await fetch("/checkin",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({booking_id:id})}); await loadBookings(); await loadOccupancy(); };
-window.checkout=async id=>{ await fetch("/checkout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({booking_id:id})}); await loadBookings(); await loadOccupancy(); };
-window.deleteBooking=async id=>{ await fetch("/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({booking_id:id})}); await loadBookings(); await loadOccupancy(); };
+  async function loadOccupancy() {
+    const res = await fetch("/occupancy");
+    const j = await res.json();
+    const el = document.getElementById("occupancyValue");
+    el.textContent = `${j.occupied} / ${j.capacity}`;
+    el.className = "fs-3 fw-bold " + (j.occupied < 6 ? "occupancy-green" : j.occupied < 11 ? "occupancy-yellow" : "occupancy-red");
+  }
 
-loadBookings(); loadOccupancy(); setInterval(loadOccupancy,5000);
+  async function loadBookings() {
+    const res = await fetch("/bookings");
+    const bookings = await res.json();
+    const div = document.getElementById("bookings");
+    div.innerHTML = "";
+    if(bookings.length===0){ div.innerHTML="<p class='text-center text-muted'>No bookings yet</p>"; return; }
+    bookings.forEach(b => {
+      const card = document.createElement("div");
+      card.className="card p-2 mb-2 shadow-sm";
+      let buttons="";
+      if(b.status==="booked") buttons += `<button class="btn btn-success btn-sm me-2" onclick="checkin(${b.booking_id})">Check-in</button>`;
+      if(b.status==="checked-in") buttons += `<button class="btn btn-warning btn-sm me-2" onclick="checkout(${b.booking_id})">Checkout</button>`;
+      buttons += `<button class="btn btn-danger btn-sm" onclick="deleteBooking(${b.booking_id})">Delete</button>`;
+      card.innerHTML=`<div><b>${b.player}</b>${b.partner ? " + "+b.partner : ""}</div><div>${b.day} | ${b.start}–${b.end}</div><div>Status: <b>${b.status}</b></div><div class="mt-2">${buttons}</div>`;
+      div.appendChild(card);
+    });
+  }
+
+  document.getElementById("bookingForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const data = new FormData(e.target);
+    if(playerSelect.value==="Other") data.set("player", playerExternal.value);
+    if(partnerSelect.value==="Other") data.set("partner_external", partnerExternal.value);
+    const resp = await fetch("/book", {method:"POST", body:data});
+    const j = await resp.json();
+    if(j.ok){ e.target.reset(); await loadBookings(); } else { alert(j.error); }
+  });
+
+  window.checkin=async id=>{await fetch("/checkin",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({booking_id:id})}); await loadBookings(); await loadOccupancy();}
+  window.checkout=async id=>{await fetch("/checkout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({booking_id:id})}); await loadBookings(); await loadOccupancy();}
+  window.deleteBooking=async id=>{await fetch("/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({booking_id:id})}); await loadBookings(); await loadOccupancy();}
+
+  loadBookings();
+  loadOccupancy();
+  setInterval(loadOccupancy,5000);
 });
 </script>
 </body>

@@ -62,17 +62,12 @@ def occupancy():
 @app.route("/book", methods=["POST"])
 def book():
     player = request.form["player"]
-    partner = request.form.get("partner")
-    external_partner = request.form.get("partner_external")
-    if partner == "other" and external_partner:
-        partner = external_partner.strip()
+    partner = request.form.get("partner_external") or request.form.get("partner")
     day = request.form["day"]
     start = request.form["start"]
     end = request.form["end"]
 
-    if partner == player:
-        return jsonify({"ok": False, "error": "Player cannot be their own partner"})
-
+    # Prevent double booking for player or partner in same slot
     conflict = Booking.query.filter(
         Booking.day==day,
         Booking.start==start,
@@ -84,11 +79,7 @@ def book():
     if conflict:
         return jsonify({"ok": False, "error": "Player or partner already booked in this slot"})
 
-    new_booking = Booking(
-        player=player, partner=partner,
-        day=day, start=start, end=end,
-        status="booked"
-    )
+    new_booking = Booking(player=player, partner=partner, day=day, start=start, end=end)
     db.session.add(new_booking)
     db.session.commit()
     return jsonify({"ok": True})
