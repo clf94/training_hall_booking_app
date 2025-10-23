@@ -32,7 +32,7 @@ class Settings(db.Model):
 users = [
     "Zech, Damian","Beranek, Peter","Basu, Soumya","Ondis, Jozef Jun",
     "Zhu, Qifeng","Matuschek, Nicolai","Norden, Jens","Tomcak, Ladislav",
-    "Potoplyak, Grygoriy","Protsch, Florian","Sladek, Samuel 723214","Braun, Jacob Martin",
+    "Potoplyak, Grygoriy","Protsch, Florian","Sladek, Samuel ","Braun, Jacob Martin",
     "Main, Maximilian","Cassanelli, Carlo","Hillmann, Matthias","Mazloumian, Amin Seyed",
     "Schlenger, Jonas","Dai, Xi","Di Michino, Giorgio","Zhang, Yong",
     "Li, Yuchen","Müsing, Andreas","Rouger, Robin","Bhardwaj, Akshat Kumar",
