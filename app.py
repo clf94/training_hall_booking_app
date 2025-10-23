@@ -15,23 +15,36 @@ class Booking(db.Model):
     end = db.Column(db.String(5))
     status = db.Column(db.String(20), default="booked")  # booked or checked-in
 
+# Hardcoded users
 users = [
-    "Zech, Damian","Beranek, Peter","Basu, Soumya","Ondis, Jozef Jun","Zhu, Qifeng","Matuschek, Nicolai",
-    "Norden, Jens","Tomcak, Ladislav","Potoplyak, Grygoriy","Protsch, Florian","Sladek, Samuel 723214",
-    "Braun, Jacob Martin","Main, Maximilian","Cassanelli, Carlo","Hillmann, Matthias",
-    "Mazloumian, Amin Seyed","Schlenger, Jonas","Dai, Xi","Di Michino, Giorgio","Zhang, Yong",
-    "Li, Yuchen","Müsing, Andreas","Rouger, Robin","Bhardwaj, Akshat Kumar","Bradac, Domagoj",
-    "Chernik, Vitaly","Grunder, Michael","Lemke, Meinolf","Loo, Christopher T","Stroh-Desler, Jens",
-    "Paliwal, Saurabh","Schaffler, Alois","Waschkies, Jannes","Hala, Michael","Lai, Xiaotong",
-    "Loosli, Dominik","Sitt, Axel","Angelini, Giacomo","Batinic, Danijel","Caldesi, Luca Francesco",
-    "Frey, Rolf","König, Markus","Bosshard, Nicolas","Distler, Jacob","Queudot, Florent",
-    "Rupp, Samuel","Trtik, Lukas","Albus, Lennart","Bamil, Aradhya","Bulmak, Munzur","Couto, Yago",
-    "De Belder, Audrey","Fuchs, Laurin","Hou, Jyun Yu","Kull, Eric","Maier, Florin","Pereira, Cesar",
-    "Salleras Hanzawa, Kei","Scalari, Giorgio","Schinz, Hanspeter","Schwarz, Peter","Sergueev, Pyotr",
-    "Sieber, Nick","Nemes, Olga","Wei, Ruoqi","Koop, Olga","Loo, Natascha","Wei, Lin Yun",
-    "Hanzawa, Michiru","Geiger, Margit","Sertcan Gökmen, Belize","Steiger, Marion","Chen, Manyu",
-    "Reichle, Indira","Foerster, Eva","Huang, Yixin","Parkitny, Lisa","Zurfluh, Ursula"
+    "Zech, Damian", "Beranek, Peter", "Basu, Soumya", "Ondis, Jozef Jun",
+    "Zhu, Qifeng", "Matuschek, Nicolai", "Norden, Jens", "Tomcak, Ladislav",
+    "Potoplyak, Grygoriy", "Protsch, Florian", "Sladek, Samuel 723214",
+    "Braun, Jacob Martin", "Main, Maximilian", "Cassanelli, Carlo",
+    "Hillmann, Matthias", "Mazloumian, Amin Seyed", "Schlenger, Jonas",
+    "Dai, Xi", "Di Michino, Giorgio", "Zhang, Yong", "Li, Yuchen",
+    "Müsing, Andreas", "Rouger, Robin", "Bhardwaj, Akshat Kumar",
+    "Bradac, Domagoj", "Chernik, Vitaly", "Grunder, Michael", "Lemke, Meinolf",
+    "Loo, Christopher T", "Stroh-Desler, Jens", "Paliwal, Saurabh",
+    "Schaffler, Alois", "Waschkies, Jannes", "Hala, Michael", "Lai, Xiaotong",
+    "Loosli, Dominik", "Sitt, Axel", "Angelini, Giacomo", "Batinic, Danijel",
+    "Caldesi, Luca Francesco", "Frey, Rolf", "König, Markus", "Bosshard, Nicolas",
+    "Distler, Jacob", "Queudot, Florent", "Rupp, Samuel", "Trtik, Lukas",
+    "Albus, Lennart", "Bamil, Aradhya", "Bulmak, Munzur", "Couto, Yago",
+    "De Belder, Audrey", "Fuchs, Laurin", "Hou, Jyun Yu", "Kull, Eric",
+    "Maier, Florin", "Pereira, Cesar", "Salleras Hanzawa, Kei", "Scalari, Giorgio",
+    "Schinz, Hanspeter", "Schwarz, Peter", "Sergueev, Pyotr", "Sieber, Nick",
+    "Nemes, Olga", "Wei, Ruoqi", "Koop, Olga", "Loo, Natascha", "Wei, Lin Yun",
+    "Hanzawa, Michiru", "Geiger, Margit", "Sertcan Gökmen, Belize",
+    "Steiger, Marion", "Chen, Manyu", "Reichle, Indira", "Foerster, Eva",
+    "Huang, Yixin", "Parkitny, Lisa", "Zurfluh, Ursula"
 ]
+
+# Store match day occupancy
+match_day_info = {
+    "occupied": 0,
+    "extra_table": False
+}
 
 @app.route("/")
 def index():
@@ -57,17 +70,19 @@ def occupancy():
     today = date.today().isoformat()
     bookings = Booking.query.filter_by(day=today, status="checked-in").all()
     occupied = sum(2 if b.partner else 1 for b in bookings)
+    occupied += match_day_info["occupied"]
     return jsonify({"occupied": occupied, "capacity": 12})
 
 @app.route("/book", methods=["POST"])
 def book():
     player = request.form["player"]
-    partner = request.form.get("partner_external") or request.form.get("partner")
+    partner = request.form.get("partner")
+    if partner == "Other":
+        partner = request.form.get("partner_external")
     day = request.form["day"]
     start = request.form["start"]
     end = request.form["end"]
 
-    # Prevent double booking for player or partner in same slot
     conflict = Booking.query.filter(
         Booking.day==day,
         Booking.start==start,
@@ -79,7 +94,7 @@ def book():
     if conflict:
         return jsonify({"ok": False, "error": "Player or partner already booked in this slot"})
 
-    new_booking = Booking(player=player, partner=partner, day=day, start=start, end=end)
+    new_booking = Booking(player=player, partner=partner, day=day, start=start, end=end, status="booked")
     db.session.add(new_booking)
     db.session.commit()
     return jsonify({"ok": True})
@@ -109,6 +124,21 @@ def delete_booking():
     if b:
         db.session.delete(b)
         db.session.commit()
+    return "", 204
+
+@app.route("/matchday", methods=["POST"])
+def matchday():
+    data = request.json
+    occupied = 0
+    if data.get("extraTable"):
+        occupied += 6  # 4 for match day + 2 extra
+        match_day_info["extra_table"] = True
+    elif data.get("day"):
+        occupied += 4
+        match_day_info["extra_table"] = False
+    else:
+        match_day_info["extra_table"] = False
+    match_day_info["occupied"] = occupied
     return "", 204
 
 if __name__ == "__main__":
