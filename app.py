@@ -6,7 +6,6 @@ import os
 from datetime import date, datetime
 
 load_dotenv()
-
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET", "supersecretkey")
 CORS(app)
@@ -22,7 +21,7 @@ class Booking(db.Model):
     day = db.Column(db.String(10))
     start = db.Column(db.String(5))
     end = db.Column(db.String(5))
-    status = db.Column(db.String(20), default="booked")  # booked or checked-in
+    status = db.Column(db.String(20), default="booked")
 
 class Settings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -48,6 +47,7 @@ users = [
     "Waschkies, Jannes","Wei, Lin Yun","Wei, Ruoqi","Zech, Damian","Zhang, Yong","Zhu, Qifeng","Zurfluh, Ursula"
 ]
 
+
 @app.before_request
 def load_settings():
     session['is_admin'] = session.get('is_admin', False)
@@ -66,23 +66,21 @@ def index():
         match_day=settings.match_day if settings else False,
         extra_table=settings.extra_table if settings else False,
         second_match=settings.second_match if settings else False,
-        second_matchextra_table=settings.second_match_extra_table if settings else False
+        second_match_extra_table=settings.second_match_extra_table if settings else False
     )
 
-@app.route("/admin-login", methods=["GET", "POST"])
+@app.route("/admin-login", methods=["GET","POST"])
 def admin_login():
-    if request.method == "POST":
-        pwd = request.form.get("password")
-        if pwd == ADMIN_PASSWORD:
-            session['is_admin'] = True
+    if request.method=="POST":
+        if request.form.get("password")==ADMIN_PASSWORD:
+            session['is_admin']=True
             return redirect(url_for("index"))
-        else:
-            return render_template("admin_login.html", error="Wrong password")
+        return render_template("admin_login.html", error="Wrong password")
     return render_template("admin_login.html", error=None)
 
 @app.route("/admin-logout")
 def admin_logout():
-    session['is_admin'] = False
+    session['is_admin']=False
     return redirect(url_for("index"))
 
 @app.route("/bookings")
@@ -106,46 +104,62 @@ def occupancy():
     bookings = Booking.query.filter_by(day=today, status="checked-in").all()
     occupied = sum(2 if b.partner else 1 for b in bookings)
     settings = Settings.query.first()
-    match_day = False
+    match_day=False
     if settings:
-        if settings.match_day:
-            occupied += 4
-            match_day = True
-        if settings.extra_table:
-            occupied += 2
-        if settings.second_match:
-            occupied += 4
-        if settings.second_match_extra_table:
-            occupied += 2
-    return jsonify({"occupied": occupied, "capacity": 12, "match_day": match_day})
+        if settings.match_day: occupied+=4; match_day=True
+        if settings.extra_table: occupied+=2
+        if settings.second_match: occupied+=4
+        if settings.second_match_extra_table: occupied+=2
+    return jsonify({"occupied": occupied, "capacity":12, "match_day":match_day})
 
 @app.route("/book", methods=["POST"])
 def book():
-    player = request.form["player"]
+    # Get player
+    player = request.form["player"].strip()
+    if player == "other":
+        player = request.form.get("player_external", "").strip()
+        if not player:
+            return jsonify({"ok": False, "error": "Please enter a player name."})
+
+    # Get partner
     partner = request.form.get("partner")
-    partner_external = request.form.get("partner_external")
     if partner == "other":
-        partner = partner_external.strip() or None
+        partner = request.form.get("partner_external", "").strip()
+    if not partner:
+        partner = None  # treat empty partner as None
+
     day = request.form["day"]
     start = request.form["start"]
     end = request.form["end"]
 
+    # Prevent booking in the past
     now = datetime.now()
     booking_time = datetime.combine(date.fromisoformat(day), datetime.strptime(start, "%H:%M").time())
     if booking_time < now:
         return jsonify({"ok": False, "error": "You cannot book slots in the past."})
 
-    conflict = Booking.query.filter(
+    # Conflict check: only check non-empty names
+    conflict_query = Booking.query.filter(
         Booking.day == day,
         Booking.start == start,
-        Booking.end == end,
-        ((Booking.player == player) | (Booking.partner == player) |
-         (Booking.player == partner) | (Booking.partner == partner))
-    ).first()
+        Booking.end == end
+    )
+    if player:
+        conflict_query = conflict_query.filter(
+            (Booking.player == player) |
+            (Booking.partner == player)
+        )
+    if partner:
+        conflict_query = conflict_query.filter(
+            (Booking.player == partner) |
+            (Booking.partner == partner)
+        )
 
+    conflict = conflict_query.first()
     if conflict:
         return jsonify({"ok": False, "error": "Player or partner already booked in this slot."})
 
+    # Add booking
     new_booking = Booking(player=player, partner=partner, day=day, start=start, end=end)
     db.session.add(new_booking)
     db.session.commit()
@@ -156,49 +170,34 @@ def book():
 
 @app.route("/checkin", methods=["POST"])
 def checkin():
-    booking_id = request.json["booking_id"]
-    b = Booking.query.get(booking_id)
-    if b:
-        b.status = "checked-in"
-        db.session.commit()
-    return "", 204
+    b = Booking.query.get(request.json["booking_id"])
+    if b: b.status="checked-in"; db.session.commit()
+    return "",204
 
 @app.route("/checkout", methods=["POST"])
 def checkout():
-    booking_id = request.json["booking_id"]
-    b = Booking.query.get(booking_id)
-    if b:
-        b.status = "booked"
-        db.session.commit()
-    return "", 204
+    b = Booking.query.get(request.json["booking_id"])
+    if b: b.status="booked"; db.session.commit()
+    return "",204
 
 @app.route("/delete", methods=["POST"])
 def delete_booking():
-    booking_id = request.json["booking_id"]
-    b = Booking.query.get(booking_id)
-    if b and session.get('is_admin'):
-        db.session.delete(b)
-        db.session.commit()
-    return "", 204
+    b = Booking.query.get(request.json["booking_id"])
+    if b and session.get('is_admin'): db.session.delete(b); db.session.commit()
+    return "",204
 
 @app.route("/update-settings", methods=["POST"])
 def update_settings():
-    if not session.get('is_admin'):
-        return "Unauthorized", 401
-    match_day = request.json.get("match_day", False)
-    extra_table = request.json.get("extra_table", False)
-    second_match = request.json.get("second_match", False)
-    second_match_extra_table = request.json.get("second_match_extra_table", False)
-    settings = Settings.query.first()
-    settings.match_day = match_day
-    settings.extra_table = extra_table
-    settings.second_match=second_match
-    settings.second_match_extra_table=second_match_extra_table
+    if not session.get('is_admin'): return "Unauthorized",401
+    s = Settings.query.first()
+    s.match_day=request.json.get("match_day",False)
+    s.extra_table=request.json.get("extra_table",False)
+    s.second_match=request.json.get("second_match",False)
+    s.second_match_extra_table=request.json.get("second_match_extra_table",False)
     db.session.commit()
-    return "", 204
+    return "",204
 
-if __name__ == "__main__":
+if __name__=="__main__":
     with app.app_context():
-        db.drop_all()
         db.create_all()
     app.run(host="0.0.0.0", port=5009, debug=True)

@@ -128,6 +128,7 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 document.addEventListener("DOMContentLoaded", ()=>{
+
   const playerSelect=document.getElementById("player");
   const partnerSelect=document.getElementById("partner");
   const playerExternal=document.getElementById("player_external");
@@ -137,6 +138,7 @@ document.addEventListener("DOMContentLoaded", ()=>{
   const matchDayNotice=document.getElementById("matchDayNotice");
   const dayInput=document.getElementById("day");
 
+  // Populate partner dropdown excluding selected player
   function populatePartners(){
     const selected=playerSelect.value;
     partnerSelect.innerHTML='<option value="">-- None --</option>';
@@ -150,6 +152,7 @@ document.addEventListener("DOMContentLoaded", ()=>{
     playerExternal.style.display=playerSelect.value=="other"?"block":"none";
     populatePartners();
   });
+
   partnerSelect.addEventListener("change", ()=>{
     partnerExternal.style.display=partnerSelect.value=="other"?"block":"none";
   });
@@ -157,11 +160,10 @@ document.addEventListener("DOMContentLoaded", ()=>{
   // 15-min slots
   const slots = [];
   let base = new Date();
-  base.setHours(8, 0, 0, 0);
-  for (let i = 0; i <= 60; i++) {
-      const t = new Date(base.getTime() + i * 15 * 60000);
-      const time = t.toTimeString().slice(0, 5);
-      slots.push(time);
+  base.setHours(8,0,0,0);
+  for(let i=0;i<=60;i++){
+    const t=new Date(base.getTime() + i*15*60000);
+    slots.push(t.toTimeString().slice(0,5));
   }
 
   function populateStartTimes(){
@@ -170,21 +172,25 @@ document.addEventListener("DOMContentLoaded", ()=>{
     const today = now.toISOString().split('T')[0];
     const currentTime = now.toTimeString().slice(0,5);
     slots.forEach(t=>{
-      if(dayInput.value===today && t<=currentTime) return; // disable past
+      if(dayInput.value===today && t <= currentTime) return;
       startSelect.append(new Option(t,t));
     });
+    startSelect.selectedIndex = 0;
+    updateEnd();
   }
 
-  function updateEnd() {
-      endSelect.innerHTML = "";
-      for (let i = startSelect.selectedIndex + 1; i < slots.length; i++) {
-          endSelect.append(new Option(slots[i], slots[i]));
-      }
+  function updateEnd(){
+    endSelect.innerHTML = "";
+    if(startSelect.selectedIndex===-1) return;
+    const startTime = startSelect.value;
+    slots.forEach(t=>{
+      if(t > startTime) endSelect.append(new Option(t,t));
+    });
+    if(endSelect.options.length>0) endSelect.selectedIndex=0;
   }
 
   startSelect.addEventListener("change", updateEnd);
   populateStartTimes();
-  updateEnd();
 
   // Occupancy & bookings
   async function loadOccupancy(){
@@ -225,17 +231,29 @@ document.addEventListener("DOMContentLoaded", ()=>{
     modal.show();
   }
 
+  // Booking form submit
   document.getElementById("bookingForm").addEventListener("submit", async e=>{
     e.preventDefault();
-    const data=new FormData(e.target);
-    const resp=await fetch("/book",{method:"POST",body:data});
-    const j=await resp.json();
+
+    const player = playerSelect.value === "other" ? playerExternal.value.trim() : playerSelect.value;
+    if(!player){ alert("Please enter player name"); return; }
+
+    const partner = partnerSelect.value === "other" ? (partnerExternal.value.trim() || null) : partnerSelect.value || null;
+
+    const formData = new FormData();
+    formData.append("player", player);
+    formData.append("partner", partner);
+    formData.append("day", dayInput.value);
+    formData.append("start", startSelect.value);
+    formData.append("end", endSelect.value);
+
+    const resp = await fetch("/book",{method:"POST", body: formData});
+    const j = await resp.json();
     if(j.ok){
       e.target.reset();
       playerExternal.style.display="none";
       partnerExternal.style.display="none";
       populateStartTimes();
-      updateEnd();
       await loadBookings();
       showUserPopup();
     } else alert(j.error);
@@ -256,18 +274,17 @@ document.addEventListener("DOMContentLoaded", ()=>{
       extraCheck.disabled = !enabled;
       second_matchCheck.disabled = !enabled;
       second_match_extra_tableCheck.disabled = !enabled;
-
-      if (!enabled) {
-          extraCheck.checked = false;
-          second_matchCheck.checked = false;
-          second_match_extra_tableCheck.checked = false;
+      if(!enabled){
+          extraCheck.checked=false;
+          second_matchCheck.checked=false;
+          second_match_extra_tableCheck.checked=false;
       }
   }
 
   async function updateSettings() {
       await fetch("/update-settings", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
           body: JSON.stringify({
               match_day: matchCheck.checked,
               extra_table: extraCheck.checked,
@@ -278,13 +295,8 @@ document.addEventListener("DOMContentLoaded", ()=>{
       await loadOccupancy();
   }
 
-  // initial state
   updateCheckboxState();
-
-  matchCheck.addEventListener("change", ()=>{
-      updateCheckboxState();
-      updateSettings();
-  });
+  matchCheck.addEventListener("change", ()=>{updateCheckboxState(); updateSettings();});
   extraCheck.addEventListener("change", updateSettings);
   second_matchCheck.addEventListener("change", updateSettings);
   second_match_extra_tableCheck.addEventListener("change", updateSettings);
@@ -300,6 +312,5 @@ document.addEventListener("DOMContentLoaded", ()=>{
   © Copyright 2025 <br>
   Luca F.Caldesi (<a href="mailto:lfcaldesi@gmail.com">lfcaldesi@gmail.com</a>)
 </footer>
-
 </body>
 </html>
