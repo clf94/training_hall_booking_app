@@ -3,7 +3,9 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from dotenv import load_dotenv
 import os
-from datetime import date, datetime, time as dt_time
+from datetime import date, datetime, time as dt_time, timedelta
+from sqlalchemy import and_, or_
+
 
 load_dotenv()
 app = Flask(__name__)
@@ -22,6 +24,9 @@ class Booking(db.Model):
     start = db.Column(db.String(5))
     end = db.Column(db.String(5))
     status = db.Column(db.String(20), default="booked")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)  # booking creation timestamp
+    checked_in_at = db.Column(db.DateTime, nullable=True)          # check-in timestamp
+
 
 class Settings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -102,207 +107,150 @@ def bookings():
             "day": b.day,
             "start": b.start,
             "end": b.end,
-            "status": b.status
+            "status": b.status,
+            "created_at": b.created_at.isoformat() if b.created_at else None,
+            "checked_in_at": b.checked_in_at.isoformat() if b.checked_in_at else None
         })
     return jsonify(data)
 
 def parse_hm_to_timeobj(hm: str):
-    """Return a datetime.time object for HH:MM or None if invalid/empty."""
-    if not hm:
-        return None
+    if not hm: return None
     try:
-        parts = hm.split(":")
-        return dt_time(int(parts[0]), int(parts[1]))
-    except Exception:
-        return None
+        h,m = map(int, hm.split(":"))
+        return dt_time(h,m)
+    except: return None
 
 def time_in_range(start: dt_time, end: dt_time, now: dt_time):
-    """Return True if now is in [start, end) when start < end.
-       If start == end treat as full-day. This assumes times on same day."""
-    if not start or not end:
-        return False
-    if start <= end:
-        return start <= now < end
-    # unlikely case (overnight), treat wrap-around
+    if not start or not end: return False
+    if start <= end: return start <= now < end
     return now >= start or now < end
 
 @app.route("/occupancy")
 def occupancy():
     today_iso = date.today().isoformat()
-    # count only checked-in bookings for today
     bookings = Booking.query.filter_by(day=today_iso, status="checked-in").all()
     occupied = 0
     for b in bookings:
-        if b.partner and not b.partner.startswith("None-"):
-            occupied += 2
-        else:
-            occupied += 1
+        occupied += 2 if b.partner and not b.partner.startswith("None-") else 1
 
     settings = Settings.query.first()
     match_day_flag = False
-    match_start = ""
-    match_end = ""
-    extra_table = False
+    match_start = settings.match_start if settings else ""
+    match_end = settings.match_end if settings else ""
+    extra_table_flag = False
     second_match_flag = False
-    second_match_extra_table = False
+    second_match_extra_table_flag = False
 
-    # current local time as time object
     now_time = datetime.now().time()
-
-    if settings:
-        # parse configured match start/end into time objects
+    if settings and settings.match_day and settings.match_start and settings.match_end:
         m_start = parse_hm_to_timeobj(settings.match_start)
         m_end = parse_hm_to_timeobj(settings.match_end)
 
-        # Apply match extras only if match_day enabled AND current time is within the match window
-        if settings.match_day and m_start and m_end and time_in_range(m_start, m_end, now_time):
-            occupied += 4
-            match_day_flag = True
-            match_start = settings.match_start
-            match_end = settings.match_end
-        else:
-            # still expose match_start/end so client knows the configured window
-            if settings.match_start:
-                match_start = settings.match_start
-            if settings.match_end:
-                match_end = settings.match_end
+        if time_in_range(m_start, m_end, now_time):
+            match_day_flag = settings.match_day
+            extra_table_flag = settings.extra_table
+            second_match_flag = settings.second_match
+            second_match_extra_table_flag = settings.second_match_extra_table
 
-        # Extra table for first match is also applied only during the match window
-        if settings.extra_table and m_start and m_end and time_in_range(m_start, m_end, now_time):
-            occupied += 2
-            extra_table = True
-
-        # Second match handling: parse separate flags the same way.
-        # For simplicity we assume second_match uses the same match_start/match_end fields.
-        if settings.second_match and m_start and m_end and time_in_range(m_start, m_end, now_time):
-            occupied += 4
-            second_match_flag = True
-        if settings.second_match_extra_table and m_start and m_end and time_in_range(m_start, m_end, now_time):
-            occupied += 2
-            second_match_extra_table = True
+            if settings.match_day: occupied += 4
+            if settings.extra_table: occupied += 2
+            if settings.second_match: occupied += 4
+            if settings.second_match_extra_table: occupied += 2
 
     return jsonify({
         "occupied": occupied,
         "capacity": 12,
-        # inform client whether extras are currently active (based on now)
         "match_day": match_day_flag,
         "match_start": match_start,
         "match_end": match_end,
-        "extra_table": extra_table,
+        "extra_table": extra_table_flag,
         "second_match": second_match_flag,
-        "second_match_extra_table": second_match_extra_table
+        "second_match_extra_table": second_match_extra_table_flag
     })
 
 @app.route("/book", methods=["POST"])
 def book():
     player = request.form["player"].strip()
-    if player == "other":
-        player = request.form.get("player_external", "").strip()
-        if not player:
-            return jsonify({"ok": False, "error": "Please enter a player name."})
+    if player=="other":
+        player = request.form.get("player_external","").strip()
+        if not player: return jsonify({"ok": False,"error":"Please enter player name."})
 
     partner = request.form.get("partner")
-    if partner == "other":
-        partner = request.form.get("partner_external", "").strip()
-    if not partner:
-        partner = None
+    if partner=="other":
+        partner = request.form.get("partner_external","").strip()
+    if not partner: partner=None
 
     day = request.form["day"]
     start = request.form["start"]
     end = request.form["end"]
-
     now = datetime.now()
     try:
-        booking_time = datetime.combine(date.fromisoformat(day), datetime.strptime(start, "%H:%M").time())
-    except Exception:
-        return jsonify({"ok": False, "error": "Invalid date/time."})
-
+        booking_time = datetime.combine(date.fromisoformat(day), datetime.strptime(start,"%H:%M").time())
+    except:
+        return jsonify({"ok": False, "error":"Invalid date/time."})
     if booking_time < now:
-        return jsonify({"ok": False, "error": "You cannot book slots in the past."})
+        return jsonify({"ok": False,"error":"Cannot book past slots."})
 
-    warning = None
     s = Settings.query.first()
     if s and s.match_day and s.match_start and s.match_end:
-        match_start_dt = datetime.strptime(s.match_start, "%H:%M").time()
-        match_end_dt = datetime.strptime(s.match_end, "%H:%M").time()
-        user_start = datetime.strptime(start, "%H:%M").time()
-        user_end = datetime.strptime(end, "%H:%M").time()
+        m_start = datetime.strptime(s.match_start,"%H:%M").time()
+        m_end = datetime.strptime(s.match_end,"%H:%M").time()
+        u_start = datetime.strptime(start,"%H:%M").time()
+        u_end = datetime.strptime(end,"%H:%M").time()
+        def intersects(a_start,a_end,b_start,b_end): return not(a_end<=b_start or a_start>=b_end)
 
-        def intersects(a_start, a_end, b_start, b_end):
-            return not (a_end <= b_start or a_start >= b_end)
-
-        if intersects(user_start, user_end, match_start_dt, match_end_dt):
-            # Check if the match is fully configured (all 4 checkboxes)
+        if intersects(u_start,u_end,m_start,m_end):
             full_match = s.match_day and s.extra_table and s.second_match and s.second_match_extra_table
             if full_match:
-                return jsonify({"ok": False, "error": "This slot is reserved for a full match. Please select another time."})
-            else:
-                # Warn user but still allow booking
-                # Optionally, show current occupancy in that window
-                existing = Booking.query.filter_by(day=day).all()
-                occupied = 0
-                for b in existing:
-                    b_start = datetime.strptime(b.start, "%H:%M").time()
-                    b_end = datetime.strptime(b.end, "%H:%M").time()
-                    if intersects(b_start, b_end, match_start_dt, match_end_dt):
-                        if b.partner and not b.partner.startswith("None-"):
-                            occupied += 2
-                        else:
-                            occupied += 1
-                MAX_CAPACITY = 12
-                warning = f"This slot overlaps the match window. Current occupancy: {occupied}/{MAX_CAPACITY}."
+                return jsonify({"ok": False, "error":"This slot is fully reserved for match. Choose another time."})
 
-    # Conflict check
+    # --- Conflict check ---
     conflict_query = Booking.query.filter(
-        Booking.day == day,
-        Booking.start == start,
-        Booking.end == end
+    Booking.day == day,
+    or_(
+        # player or partner overlap
+        and_(Booking.player == player if player else False),
+        and_(Booking.partner == player if player else False),
+        and_(Booking.player == partner if partner else False),
+        and_(Booking.partner == partner if partner else False),
+    ),
+    # time overlap
+    or_(
+        and_(Booking.start <= start, Booking.end > start),
+        and_(Booking.start < end, Booking.end >= end),
+        and_(Booking.start >= start, Booking.end <= end)
     )
-    conflict_filters = []
-    if player:
-        conflict_filters.append((Booking.player == player) | (Booking.partner == player))
-    if partner:
-        conflict_filters.append((Booking.player == partner) | (Booking.partner == partner))
-    if conflict_filters:
-        for f in conflict_filters:
-            conflict_query = conflict_query.filter(f)
-
-    conflict = conflict_query.first()
-    if conflict:
-        return jsonify({"ok": False, "error": "Player or partner already booked in this slot."})
+)
+    if conflict_query.first():
+       return jsonify({"ok": False, "error":"Player or partner already booked in this slot."})
 
     new_booking = Booking(player=player, partner=partner, day=day, start=start, end=end)
     db.session.add(new_booking)
     db.session.commit()
-
-    response = {
-        "ok": True,
-        "message": "Booking successful! If you want to cancel your booking, please get in touch with an admin."
-    }
-    if warning:
-        response["warning"] = warning
-
-    return jsonify(response)
+    return jsonify({"ok": True,"message":"Booking successful!"})
 
 @app.route("/checkin", methods=["POST"])
 def checkin():
     booking_id = request.json.get("booking_id")
     b = Booking.query.get(booking_id)
     if b:
-        b.status = "checked-in"
+        # Only allow check-in on the same day
+        if b.day != date.today().isoformat():
+            return jsonify({"ok": False, "error":"Check-in only allowed today."}), 400
+        b.status="checked-in"
         db.session.commit()
-        return jsonify({"ok": True}), 200
-    return jsonify({"ok": False, "error": "Booking not found"}), 404
+        return jsonify({"ok": True})
+    return jsonify({"ok": False,"error":"Booking not found"}),404
 
 @app.route("/checkout", methods=["POST"])
 def checkout():
     booking_id = request.json.get("booking_id")
     b = Booking.query.get(booking_id)
     if b:
-        b.status = "booked"
+        b.status="booked"
         db.session.commit()
-        return jsonify({"ok": True}), 200
-    return jsonify({"ok": False, "error": "Booking not found"}), 404
+        return jsonify({"ok": True})
+    return jsonify({"ok": False,"error":"Booking not found"}),404
 
 @app.route("/delete", methods=["POST"])
 def delete_booking():
@@ -311,30 +259,23 @@ def delete_booking():
     if b and session.get('is_admin'):
         db.session.delete(b)
         db.session.commit()
-        return jsonify({"ok": True}), 200
-    return jsonify({"ok": False, "error": "Not authorized or booking missing"}), 401
+        return jsonify({"ok": True})
+    return jsonify({"ok": False,"error":"Not authorized or booking missing"}),401
 
 @app.route("/update-settings", methods=["POST"])
 def update_settings():
-    if not session.get('is_admin'):
-        return "Unauthorized", 401
-    match_day = request.json.get("match_day", False)
-    extra_table = request.json.get("extra_table", False)
-    second_match = request.json.get("second_match", False)
-    second_match_extra_table = request.json.get("second_match_extra_table", False)
-    match_start = request.json.get("match_start", "")
-    match_end = request.json.get("match_end", "")
-    settings = Settings.query.first()
-    settings.match_day = match_day
-    settings.extra_table = extra_table
-    settings.second_match = second_match
-    settings.second_match_extra_table = second_match_extra_table
-    settings.match_start = match_start
-    settings.match_end = match_end
+    if not session.get('is_admin'): return "Unauthorized", 401
+    payload = request.json
+    s = Settings.query.first()
+    s.match_day = payload.get("match_day", False)
+    s.extra_table = payload.get("extra_table", False)
+    s.second_match = payload.get("second_match", False)
+    s.second_match_extra_table = payload.get("second_match_extra_table", False)
+    s.match_start = payload.get("match_start","")
+    s.match_end = payload.get("match_end","")
     db.session.commit()
-    return jsonify({"ok": True}), 200
+    return jsonify({"ok": True})
 
-if __name__ == "__main__":
-    with app.app_context():
-        db.create_all()
-    app.run(host="0.0.0.0", port=5009, debug=True)
+if __name__=="__main__":
+   with app.app_context(): db.create_all()
+   app.run(host="0.0.0.0", port=5009, debug=True)

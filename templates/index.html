@@ -32,12 +32,10 @@
 <div class="container admin-section">
   <div class="card p-3 shadow-sm">
     <h5>Admin Section</h5>
-
     <div class="form-check mb-2">
       <input type="checkbox" class="form-check-input" id="match_day" {% if match_day %}checked{% endif %}>
       <label class="form-check-label" for="match_day">Match Day (2 tables)</label>
     </div>
-
     <div id="match_range" style="display: {% if match_day %}block{% else %}none{% endif %};">
       <div class="row g-2">
         <div class="col">
@@ -109,7 +107,7 @@
 
           <div class="mb-2">
             <label class="form-label">Day</label>
-            <input type="date" id="day" name="day" class="form-control" value="{{ date.isoformat() }}" readonly required />
+            <select id="day" name="day" class="form-select" required></select>
           </div>
 
           <div class="mb-2">
@@ -128,12 +126,10 @@
     </div>
   </div>
 </div>
-
 <hr>
 <h3 class="text-center">Bookings</h3>
 <div id="bookings" class="container mb-5"></div>
 
-<!-- Booking success modal -->
 <div class="modal fade" id="userPopup" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content text-center">
@@ -159,7 +155,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const partnerExternal = document.getElementById('partner_external');
   const startSelect = document.getElementById('start');
   const endSelect = document.getElementById('end');
-  const dayInput = document.getElementById('day');
+  const daySelect = document.getElementById('day');
+
+  const today = new Date();
+  const tomorrow = new Date();
+  tomorrow.setDate(today.getDate() + 1);
+  const dayOptions = [
+    { label: 'Today', value: today.toISOString().split('T')[0] },
+    { label: 'Tomorrow', value: tomorrow.toISOString().split('T')[0] }
+  ];
+  dayOptions.forEach(o => daySelect.appendChild(new Option(o.label, o.value)));
+  daySelect.value = dayOptions[0].value;
+
   const matchDayNotice = document.getElementById('matchDayNotice');
   const bookingsContainer = document.getElementById('bookings');
   const occupancyValue = document.getElementById('occupancyValue');
@@ -167,9 +174,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const submitBtn = document.getElementById('submitBtn');
 
   const slots = [];
-  const base = new Date();
-  base.setHours(8,0,0,0);
-  const SLOT_COUNT = 56;
+  const base = new Date(); base.setHours(6,0,0,0);
+  const SLOT_COUNT = 72;
   for (let i=0; i<=SLOT_COUNT; i++){
     const d = new Date(base.getTime() + i*15*60000);
     slots.push(d.toTimeString().slice(0,5));
@@ -188,8 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const matchStartSelect = document.getElementById('match_start');
   const matchEndSelect = document.getElementById('match_end');
   slots.forEach(t=>{ matchStartSelect.append(new Option(t,t)); matchEndSelect.append(new Option(t,t)); });
-  matchStartSelect.value="{{ match_start }}";
-  matchEndSelect.value="{{ match_end }}";
+  matchStartSelect.value="{{ match_start }}"; matchEndSelect.value="{{ match_end }}";
   document.getElementById('match_day').addEventListener('change', ()=>{ document.getElementById('match_range').style.display=document.getElementById('match_day').checked?'block':'none'; });
   {% endif %}
 
@@ -197,8 +202,9 @@ document.addEventListener('DOMContentLoaded', () => {
   function nowTime(){ return new Date().toTimeString().slice(0,5); }
   let lastOccupancy=null;
 
-  function populateStartTimes(occupancy){
+function populateStartTimes(occupancy){
     lastOccupancy = occupancy;
+    const prevStart = startSelect.value; // save previous selection
     startSelect.innerHTML = '';
     const today = isoToday();
     const now = nowTime();
@@ -206,111 +212,114 @@ document.addEventListener('DOMContentLoaded', () => {
 
     startSlots.forEach(t=>{
       const opt = new Option(t, t);
-      if (dayInput.value === today && t <= now) { opt.disabled = true; opt.classList.add('disabled-slot'); }
-      if (occupancy && occupancy.match_day && occupancy.match_start && occupancy.match_end) {
-        const inRange = (t >= occupancy.match_start && t < occupancy.match_end);
-        if (inRange && occupancy.occupied >= occupancy.capacity) { opt.disabled = true; opt.classList.add('disabled-slot'); }
+      if(daySelect.value===today && t<=now){ opt.disabled=true; opt.classList.add('disabled-slot'); }
+      if(occupancy && occupancy.match_day && occupancy.match_start && occupancy.match_end){
+        const inRange=(t>=occupancy.match_start && t<occupancy.match_end);
+        if(inRange && occupancy.occupied>=occupancy.capacity){ opt.disabled=true; opt.classList.add('disabled-slot'); }
       }
       startSelect.append(opt);
     });
 
     const valid = Array.from(startSelect.options).some(o=>!o.disabled);
-    if (!valid){ startSelect.innerHTML = '<option disabled selected>No available start times</option>'; endSelect.innerHTML = '<option disabled selected>No available end times</option>'; submitBtn.disabled=true; return; }
-    startSelect.selectedIndex = Array.from(startSelect.options).findIndex(o=>!o.disabled);
+    if(!valid){
+      startSelect.innerHTML='<option disabled selected>No available start times</option>';
+      endSelect.innerHTML='<option disabled selected>No available end times</option>';
+      submitBtn.disabled=true;
+      return;
+    }
+
+    // Keep previous selection if still valid
+    const stillValid = Array.from(startSelect.options).some(o=>o.value===prevStart && !o.disabled);
+    if(stillValid){
+      startSelect.value = prevStart;
+    } else {
+      startSelect.selectedIndex = Array.from(startSelect.options).findIndex(o=>!o.disabled);
+    }
+
     submitBtn.disabled=false;
     updateEnd();
-  }
+}
+
 
   function updateEnd(){
-    endSelect.innerHTML = '';
-    if (startSelect.selectedIndex === -1) return;
+    endSelect.innerHTML='';
+    if(startSelect.selectedIndex===-1) return;
     const chosenStart = startSelect.value;
-    const today = isoToday();
-    const now = nowTime();
     slots.forEach(t=>{
-      if (t <= chosenStart) return;
-      const opt = new Option(t, t);
-      if (dayInput.value === today && t <= now) { opt.disabled=true; opt.classList.add('disabled-slot'); }
-      if (lastOccupancy && lastOccupancy.match_day && lastOccupancy.match_start && lastOccupancy.match_end) {
-        const inRange = (t > lastOccupancy.match_start && t <= lastOccupancy.match_end);
-        if (inRange && lastOccupancy.occupied >= lastOccupancy.capacity) { opt.disabled=true; opt.classList.add('disabled-slot'); }
+      if(t<=chosenStart) return;
+      const opt=new Option(t,t);
+      if(daySelect.value===isoToday() && t<=nowTime()){ opt.disabled=true; opt.classList.add('disabled-slot'); }
+      if(lastOccupancy && lastOccupancy.match_day && lastOccupancy.match_start && lastOccupancy.match_end){
+        const inRange=(t>lastOccupancy.match_start && t<=lastOccupancy.match_end);
+        if(inRange && lastOccupancy.occupied>=lastOccupancy.capacity){ opt.disabled=true; opt.classList.add('disabled-slot'); }
       }
       endSelect.append(opt);
     });
-    const valid = Array.from(endSelect.options).some(o=>!o.disabled);
-    if (!valid){ endSelect.innerHTML='<option disabled selected>No available end times</option>'; submitBtn.disabled=true; return; }
-    endSelect.selectedIndex = Array.from(endSelect.options).findIndex(o=>!o.disabled);
+    const valid=Array.from(endSelect.options).some(o=>!o.disabled);
+    if(!valid){ endSelect.innerHTML='<option disabled selected>No available end times</option>'; submitBtn.disabled=true; return; }
+    endSelect.selectedIndex=Array.from(endSelect.options).findIndex(o=>!o.disabled);
     submitBtn.disabled=false;
   }
   startSelect.addEventListener('change', updateEnd);
 
   async function loadBookings(){
-    const res = await fetch('/bookings?t=' + Date.now());
-    const list = await res.json();
-    bookingsContainer.innerHTML = list.length ? '' : "<p class='text-center text-muted'>No bookings yet</p>";
+    const res=await fetch('/bookings?t='+Date.now());
+    const list=await res.json();
+    bookingsContainer.innerHTML=list.length?"":"<p class='text-center text-muted'>No bookings yet</p>";
+    const todayStr = isoToday();
+
     list.forEach(b=>{
-      const card=document.createElement('div'); card.className='card p-2 mb-2 shadow-sm';
+      const card=document.createElement('div'); 
+      card.className='card p-2 mb-2 shadow-sm';
       const partnerText=b.partner?b.partner:"(no partner)";
+      
+      const bookedTime = b.created_at ? new Date(b.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : 'Unknown';
+      const checkinTime = b.checked_in_at ? ` | Checked in: ${new Date(b.checked_in_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}` : '';
+      const timeText = `(${b.start}–${b.end} — Booked at: ${bookedTime}${checkinTime})`;
+
       let buttons='';
-      if (b.status==='booked') buttons+=`<button class="btn btn-success btn-sm me-2" onclick="checkin(${b.booking_id})">Check-in</button>`;
-      if (b.status==='checked-in') buttons+=`<button class="btn btn-warning btn-sm me-2" onclick="checkout(${b.booking_id})">Checkout</button>`;
+      const bookingDay = b.day;
+      const isFuture = bookingDay > todayStr;
+      if(b.status==='booked') buttons+=`<button class="btn btn-success btn-sm me-2" ${isFuture ? 'disabled title="Cannot check in for future days"' : `onclick="checkin(${b.booking_id})"`}>Check-in</button>`;
+      if(b.status==='checked-in') buttons+=`<button class="btn btn-warning btn-sm me-2" onclick="checkout(${b.booking_id})">Checkout</button>`;
       {% if is_admin %} buttons+=`<button class="btn btn-danger btn-sm" onclick="deleteBooking(${b.booking_id})">Delete</button>`; {% endif %}
-      card.innerHTML=`<div><b>${b.player}</b> + ${partnerText}</div><div>${b.day} | ${b.start}–${b.end}</div><div>Status: <b>${b.status}</b></div><div class="mt-2">${buttons}</div>`;
+
+      card.innerHTML=`<div><b>${b.player} </b> <i>${timeText}<i> + ${partnerText}</div>
+                <div>Booked for: ${b.day}</div>
+                <div>Status: <b>${b.status}</b></div>
+                <div class="mt-2">${buttons}</div>`;
       bookingsContainer.appendChild(card);
     });
   }
 
-async function loadOccupancy(){
-    const res = await fetch('/occupancy?t=' + Date.now());
-    const j = await res.json();
-    
-    // Update occupancy counter
-    const liveOccupied = j.occupied;
-    occupancyValue.textContent = `${liveOccupied} / ${j.capacity}`;
-    occupancyValue.className = "fs-3 fw-bold " + (liveOccupied < 6 ? "occupancy-green" : liveOccupied < 11 ? "occupancy-yellow" : "occupancy-red");
+  async function loadOccupancy(){
+    const res=await fetch('/occupancy?t='+Date.now());
+    const j=await res.json();
+    const liveOccupied=j.occupied;
+    occupancyValue.textContent=`${liveOccupied} / ${j.capacity}`;
+    occupancyValue.className="fs-3 fw-bold "+(liveOccupied<6?"occupancy-green":liveOccupied<11?"occupancy-yellow":"occupancy-red");
 
-    // Match Day info
-    if (j.match_start && j.match_end) {
-        matchDayNotice.style.display = 'block';
-        matchInfo.style.display = 'block';
-        matchInfo.textContent = `Match during the following slot : ${j.match_start} – ${j.match_end}`;
-    } else {
-        matchDayNotice.style.display = 'none';
-        matchInfo.style.display = 'none';
-    }
+    if(j.match_start && j.match_end){
+      matchDayNotice.style.display='block';
+      matchInfo.style.display='block';
+      matchInfo.textContent=`Match during the following slot : ${j.match_start} – ${j.match_end}`;
+    } else { matchDayNotice.style.display='none'; matchInfo.style.display='none'; }
+
     populateStartTimes(j);
+    const bookingWarningEl = document.getElementById('bookingWarning') || (()=>{ const form=document.getElementById('bookingForm'); const div=document.createElement('div'); div.id='bookingWarning'; div.className='text-warning fw-bold mb-2'; form.prepend(div); return div; })();
+    bookingWarningEl.textContent = (j.match_start && j.match_end && j.occupied<j.capacity)?`⚠️ Match scheduled for: ${j.match_start} – ${j.match_end}. Slots may fill quickly!`:"";
+    bookingWarningEl.style.display = bookingWarningEl.textContent?"block":"none";
+  }
 
-    // Display warning below booking form for partially configured matches
-    const bookingWarningEl = document.getElementById('bookingWarning');
-    if(!bookingWarningEl){
-        const form = document.getElementById('bookingForm');
-        const div = document.createElement('div');
-        div.id = 'bookingWarning';
-        div.className = 'text-warning fw-bold mb-2';
-        form.prepend(div);
-    }
-
-    const warningDiv = document.getElementById('bookingWarning');
-    if(j.match_start && j.match_end && j.occupied < j.capacity){
-        warningDiv.textContent = `⚠️ Partial match in progress: ${j.match_start} – ${j.match_end}. Slots may fill quickly!`;
-        warningDiv.style.display = 'block';
-    } else {
-        warningDiv.style.display = 'none';
-    }
-}
-
-
-
-  // Form submission
   document.getElementById('bookingForm').addEventListener('submit', async (e)=>{
     e.preventDefault();
     const player=(playerSelect.value==='other')?playerExternal.value.trim():playerSelect.value;
-    if(!player){alert('Please enter player name');return;}
+    if(!player){alert('Please enter player name'); return;}
     let partner=(partnerSelect.value==='other')?partnerExternal.value.trim()||null:partnerSelect.value||null;
     let partnerToSend = partner || `None-${Date.now()}-${Math.floor(Math.random()*10000)}`;
     const fd=new FormData();
     fd.append('player',player); fd.append('partner',partnerToSend);
-    fd.append('day',dayInput.value); fd.append('start',startSelect.value); fd.append('end',endSelect.value);
+    fd.append('day',daySelect.value); fd.append('start',startSelect.value); fd.append('end',endSelect.value);
     const resp=await fetch('/book',{method:'POST',body:fd}); const j=await resp.json();
     if(j.ok){ document.getElementById('bookingForm').reset(); playerExternal.style.display='none'; partnerExternal.style.display='none'; await loadBookings(); await loadOccupancy(); new bootstrap.Modal(document.getElementById('userPopup')).show(); }
     else alert(j.error||'Booking failed');
@@ -335,9 +344,8 @@ async function loadOccupancy(){
   });
   {% endif %}
 
-  loadBookings();
-  loadOccupancy();
-  setInterval(loadOccupancy, 5000); // live update even during match day
+  loadBookings(); loadOccupancy();
+  setInterval(loadOccupancy, 5000);
 });
 </script>
 
