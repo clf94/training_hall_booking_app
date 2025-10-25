@@ -1,28 +1,30 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Training Hall Booking</title>
 <link rel="icon" href="/static/logo.png" type="image/png">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 <style>
-.occupancy-green { color: green; }
-.occupancy-yellow { color: goldenrod; }
-.occupancy-red { color: red; }
-.logo { max-height:60px;margin-bottom:20px; }
-.admin-section { margin-bottom:20px; }
+  .occupancy-green { color: green; }
+  .occupancy-yellow { color: goldenrod; }
+  .occupancy-red { color: red; }
+  .logo { max-height:60px; margin-bottom:20px; }
+  .admin-section { margin-bottom:20px; }
+  .disabled-slot { text-decoration: line-through; color: gray !important; }
+  .match-info { font-size:0.9rem; color:#555; margin-bottom:0.5rem; }
 </style>
 </head>
 <body class="bg-light">
 
 <div class="container my-4 text-center">
-  <img src="/static/logo.png" class="logo">
+  <img src="/static/logo.png" class="logo" alt="logo">
   <h1>Tischtennisclub Zürich Affoltern</h1>
   {% if not is_admin %}
-  <a href="{{ url_for('admin_login') }}" class="btn btn-warning mt-2">Admin Login</a>
+    <a href="{{ url_for('admin_login') }}" class="btn btn-warning mt-2">Admin Login</a>
   {% else %}
-  <a href="{{ url_for('admin_logout') }}" class="btn btn-danger mt-2">Admin Logout</a>
+    <a href="{{ url_for('admin_logout') }}" class="btn btn-danger mt-2">Admin Logout</a>
   {% endif %}
 </div>
 
@@ -30,22 +32,41 @@
 <div class="container admin-section">
   <div class="card p-3 shadow-sm">
     <h5>Admin Section</h5>
+
     <div class="form-check mb-2">
       <input type="checkbox" class="form-check-input" id="match_day" {% if match_day %}checked{% endif %}>
       <label class="form-check-label" for="match_day">Match Day (2 tables)</label>
     </div>
-    <div class="form-check mb-2">
+
+    <div id="match_range" style="display: {% if match_day %}block{% else %}none{% endif %};">
+      <div class="row g-2">
+        <div class="col">
+          <label class="form-label">Match Start</label>
+          <select id="match_start" class="form-select"></select>
+        </div>
+        <div class="col">
+          <label class="form-label">Match End</label>
+          <select id="match_end" class="form-select"></select>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-check mb-2 mt-3">
       <input type="checkbox" class="form-check-input" id="extra_table" {% if extra_table %}checked{% endif %}>
       <label class="form-check-label" for="extra_table">Extra Table</label>
     </div>
+
     <div class="form-check mb-2">
       <input type="checkbox" class="form-check-input" id="second_match" {% if second_match %}checked{% endif %}>
       <label class="form-check-label" for="second_match">Second Match (2 tables)</label>
     </div>
+
     <div class="form-check mb-2">
       <input type="checkbox" class="form-check-input" id="second_match_extra_table" {% if second_match_extra_table %}checked{% endif %}>
       <label class="form-check-label" for="second_match_extra_table">Extra Table for Second Match</label>
     </div>
+
+    <button id="save_settings" class="btn btn-primary mt-2 w-100">Save Settings</button>
   </div>
 </div>
 {% endif %}
@@ -57,47 +78,51 @@
         <h5>Live Occupancy</h5>
         <div id="occupancyValue" class="fs-3 fw-bold occupancy-green">0 / 12</div>
         <div id="matchDayNotice" class="text-center text-primary fw-bold" style="display:none;">Match Day!</div>
+        <div id="matchInfo" class="match-info" style="display:none;"></div>
       </div>
     </div>
 
     <div class="col-md-8 col-sm-12">
       <div class="card p-3 shadow-sm">
         <h5 class="mb-3">Book a Session</h5>
+
         <form id="bookingForm">
           <div class="mb-2">
-            <label>Player</label>
+            <label class="form-label">Player</label>
             <select id="player" name="player" class="form-select" required>
               <option value="">-- Select player --</option>
               {% for u in users %}<option value="{{ u }}">{{ u }}</option>{% endfor %}
               <option value="other">Other</option>
             </select>
-            <input type="text" id="player_external" placeholder="Enter player name" class="form-control mt-1" style="display:none;">
+            <input type="text" id="player_external" placeholder="Enter player name" class="form-control mt-1" style="display:none;" />
           </div>
 
           <div class="mb-2">
-            <label>Partner</label>
+            <label class="form-label">Partner</label>
             <select id="partner" name="partner" class="form-select">
               <option value="">-- None --</option>
               {% for u in users %}<option value="{{ u }}">{{ u }}</option>{% endfor %}
               <option value="other">Other</option>
             </select>
-            <input type="text" id="partner_external" placeholder="Enter partner name" class="form-control mt-1" style="display:none;">
+            <input type="text" id="partner_external" placeholder="Enter partner name" class="form-control mt-1" style="display:none;" />
           </div>
 
           <div class="mb-2">
-            <label>Day</label>
-            <input type="date" id="day" name="day" class="form-control" value="{{ date.isoformat() }}" readonly required>
+            <label class="form-label">Day</label>
+            <input type="date" id="day" name="day" class="form-control" value="{{ date.isoformat() }}" readonly required />
           </div>
 
           <div class="mb-2">
-            <label>Start Time</label>
+            <label class="form-label">Start Time</label>
             <select id="start" name="start" class="form-select" required></select>
           </div>
+
           <div class="mb-3">
-            <label>End Time</label>
+            <label class="form-label">End Time</label>
             <select id="end" name="end" class="form-select" required></select>
           </div>
-          <button type="submit" class="btn btn-primary w-100">Book</button>
+
+          <button type="submit" id="submitBtn" class="btn btn-primary w-100">Book</button>
         </form>
       </div>
     </div>
@@ -108,7 +133,7 @@
 <h3 class="text-center">Bookings</h3>
 <div id="bookings" class="container mb-5"></div>
 
-<!-- User popup modal -->
+<!-- Booking success modal -->
 <div class="modal fade" id="userPopup" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content text-center">
@@ -127,188 +152,196 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-document.addEventListener("DOMContentLoaded", ()=>{
+document.addEventListener('DOMContentLoaded', () => {
+  const playerSelect = document.getElementById('player');
+  const partnerSelect = document.getElementById('partner');
+  const playerExternal = document.getElementById('player_external');
+  const partnerExternal = document.getElementById('partner_external');
+  const startSelect = document.getElementById('start');
+  const endSelect = document.getElementById('end');
+  const dayInput = document.getElementById('day');
+  const matchDayNotice = document.getElementById('matchDayNotice');
+  const bookingsContainer = document.getElementById('bookings');
+  const occupancyValue = document.getElementById('occupancyValue');
+  const matchInfo = document.getElementById('matchInfo');
+  const submitBtn = document.getElementById('submitBtn');
 
-  const playerSelect=document.getElementById("player");
-  const partnerSelect=document.getElementById("partner");
-  const playerExternal=document.getElementById("player_external");
-  const partnerExternal=document.getElementById("partner_external");
-  const startSelect=document.getElementById("start");
-  const endSelect=document.getElementById("end");
-  const matchDayNotice=document.getElementById("matchDayNotice");
-  const dayInput=document.getElementById("day");
-
-  // Populate partner dropdown excluding selected player
-  function populatePartners(){
-    const selected=playerSelect.value;
-    partnerSelect.innerHTML='<option value="">-- None --</option>';
-    {% for u in users %}
-      if("{{ u }}"!==selected) partnerSelect.innerHTML+=`<option value="{{ u }}">{{ u }}</option>`;
-    {% endfor %}
-    partnerSelect.innerHTML+='<option value="other">Other</option>';
-  }
-
-  playerSelect.addEventListener("change", ()=>{
-    playerExternal.style.display=playerSelect.value=="other"?"block":"none";
-    populatePartners();
-  });
-
-  partnerSelect.addEventListener("change", ()=>{
-    partnerExternal.style.display=partnerSelect.value=="other"?"block":"none";
-  });
-
-  // 15-min slots
   const slots = [];
-  let base = new Date();
+  const base = new Date();
   base.setHours(8,0,0,0);
-  for(let i=0;i<=60;i++){
-    const t=new Date(base.getTime() + i*15*60000);
-    slots.push(t.toTimeString().slice(0,5));
+  const SLOT_COUNT = 56;
+  for (let i=0; i<=SLOT_COUNT; i++){
+    const d = new Date(base.getTime() + i*15*60000);
+    slots.push(d.toTimeString().slice(0,5));
   }
 
-  function populateStartTimes(){
+  function populatePartners(){
+    const selected = playerSelect.value;
+    partnerSelect.innerHTML = '<option value="">-- None --</option>';
+    {% for u in users %} if ("{{u}}" !== selected) partnerSelect.innerHTML += `<option value="{{u}}">{{u}}</option>`; {% endfor %}
+    partnerSelect.innerHTML += '<option value="other">Other</option>';
+  }
+  playerSelect.addEventListener('change', ()=>{ playerExternal.style.display = playerSelect.value==='other'?'block':'none'; populatePartners(); });
+  partnerSelect.addEventListener('change', ()=>{ partnerExternal.style.display = partnerSelect.value==='other'?'block':'none'; });
+
+  {% if is_admin %}
+  const matchStartSelect = document.getElementById('match_start');
+  const matchEndSelect = document.getElementById('match_end');
+  slots.forEach(t=>{ matchStartSelect.append(new Option(t,t)); matchEndSelect.append(new Option(t,t)); });
+  matchStartSelect.value="{{ match_start }}";
+  matchEndSelect.value="{{ match_end }}";
+  document.getElementById('match_day').addEventListener('change', ()=>{ document.getElementById('match_range').style.display=document.getElementById('match_day').checked?'block':'none'; });
+  {% endif %}
+
+  function isoToday(){ return new Date().toISOString().split('T')[0]; }
+  function nowTime(){ return new Date().toTimeString().slice(0,5); }
+  let lastOccupancy=null;
+
+  function populateStartTimes(occupancy){
+    lastOccupancy = occupancy;
     startSelect.innerHTML = '';
-    const now = new Date();
-    const today = now.toISOString().split('T')[0];
-    const currentTime = now.toTimeString().slice(0,5);
-    slots.forEach(t=>{
-      if(dayInput.value===today && t <= currentTime) return;
-      startSelect.append(new Option(t,t));
+    const today = isoToday();
+    const now = nowTime();
+    const startSlots = slots.slice(0, slots.length - 1);
+
+    startSlots.forEach(t=>{
+      const opt = new Option(t, t);
+      if (dayInput.value === today && t <= now) { opt.disabled = true; opt.classList.add('disabled-slot'); }
+      if (occupancy && occupancy.match_day && occupancy.match_start && occupancy.match_end) {
+        const inRange = (t >= occupancy.match_start && t < occupancy.match_end);
+        if (inRange && occupancy.occupied >= occupancy.capacity) { opt.disabled = true; opt.classList.add('disabled-slot'); }
+      }
+      startSelect.append(opt);
     });
-    startSelect.selectedIndex = 0;
+
+    const valid = Array.from(startSelect.options).some(o=>!o.disabled);
+    if (!valid){ startSelect.innerHTML = '<option disabled selected>No available start times</option>'; endSelect.innerHTML = '<option disabled selected>No available end times</option>'; submitBtn.disabled=true; return; }
+    startSelect.selectedIndex = Array.from(startSelect.options).findIndex(o=>!o.disabled);
+    submitBtn.disabled=false;
     updateEnd();
   }
 
   function updateEnd(){
-    endSelect.innerHTML = "";
-    if(startSelect.selectedIndex===-1) return;
-    const startTime = startSelect.value;
+    endSelect.innerHTML = '';
+    if (startSelect.selectedIndex === -1) return;
+    const chosenStart = startSelect.value;
+    const today = isoToday();
+    const now = nowTime();
     slots.forEach(t=>{
-      if(t > startTime) endSelect.append(new Option(t,t));
+      if (t <= chosenStart) return;
+      const opt = new Option(t, t);
+      if (dayInput.value === today && t <= now) { opt.disabled=true; opt.classList.add('disabled-slot'); }
+      if (lastOccupancy && lastOccupancy.match_day && lastOccupancy.match_start && lastOccupancy.match_end) {
+        const inRange = (t > lastOccupancy.match_start && t <= lastOccupancy.match_end);
+        if (inRange && lastOccupancy.occupied >= lastOccupancy.capacity) { opt.disabled=true; opt.classList.add('disabled-slot'); }
+      }
+      endSelect.append(opt);
     });
-    if(endSelect.options.length>0) endSelect.selectedIndex=0;
+    const valid = Array.from(endSelect.options).some(o=>!o.disabled);
+    if (!valid){ endSelect.innerHTML='<option disabled selected>No available end times</option>'; submitBtn.disabled=true; return; }
+    endSelect.selectedIndex = Array.from(endSelect.options).findIndex(o=>!o.disabled);
+    submitBtn.disabled=false;
   }
-
-  startSelect.addEventListener("change", updateEnd);
-  populateStartTimes();
-
-  // Occupancy & bookings
-  async function loadOccupancy(){
-    const res=await fetch("/occupancy");
-    const j=await res.json();
-    const el=document.getElementById("occupancyValue");
-    el.textContent=`${j.occupied} / ${j.capacity}`;
-    el.className="fs-3 fw-bold "+(j.occupied<6?"occupancy-green":j.occupied<11?"occupancy-yellow":"occupancy-red");
-    matchDayNotice.style.display=j.match_day?"block":"none";
-  }
+  startSelect.addEventListener('change', updateEnd);
 
   async function loadBookings(){
-    const res=await fetch("/bookings");
-    const bookings=await res.json();
-    const div=document.getElementById("bookings");
-    div.innerHTML="";
-    if(bookings.length===0){div.innerHTML="<p class='text-center text-muted'>No bookings yet</p>";return;}
-    bookings.forEach(b=>{
-      const card=document.createElement("div");
-      card.className="card p-2 mb-2 shadow-sm";
-      let buttons="";
-      if(b.status==="booked") buttons+=`<button class="btn btn-success btn-sm me-2" onclick="checkin(${b.booking_id})">Check-in</button>`;
-      if(b.status==="checked-in") buttons+=`<button class="btn btn-warning btn-sm me-2" onclick="checkout(${b.booking_id})">Checkout</button>`;
-      {% if is_admin %}
-      buttons+=`<button class="btn btn-danger btn-sm" onclick="deleteBooking(${b.booking_id})">Delete</button>`;
-      {% endif %}
-      card.innerHTML=`
-        <div><b>${b.player}</b>${b.partner?" + "+b.partner:""}</div>
-        <div>${b.day} | ${b.start}–${b.end}</div>
-        <div>Status: <b>${b.status}</b></div>
-        <div class="mt-2">${buttons}</div>`;
-      div.appendChild(card);
+    const res = await fetch('/bookings?t=' + Date.now());
+    const list = await res.json();
+    bookingsContainer.innerHTML = list.length ? '' : "<p class='text-center text-muted'>No bookings yet</p>";
+    list.forEach(b=>{
+      const card=document.createElement('div'); card.className='card p-2 mb-2 shadow-sm';
+      const partnerText=b.partner?b.partner:"(no partner)";
+      let buttons='';
+      if (b.status==='booked') buttons+=`<button class="btn btn-success btn-sm me-2" onclick="checkin(${b.booking_id})">Check-in</button>`;
+      if (b.status==='checked-in') buttons+=`<button class="btn btn-warning btn-sm me-2" onclick="checkout(${b.booking_id})">Checkout</button>`;
+      {% if is_admin %} buttons+=`<button class="btn btn-danger btn-sm" onclick="deleteBooking(${b.booking_id})">Delete</button>`; {% endif %}
+      card.innerHTML=`<div><b>${b.player}</b> + ${partnerText}</div><div>${b.day} | ${b.start}–${b.end}</div><div>Status: <b>${b.status}</b></div><div class="mt-2">${buttons}</div>`;
+      bookingsContainer.appendChild(card);
     });
   }
 
-  function showUserPopup(){
-    const modal = new bootstrap.Modal(document.getElementById('userPopup'));
-    modal.show();
-  }
+async function loadOccupancy(){
+    const res = await fetch('/occupancy?t=' + Date.now());
+    const j = await res.json();
+    
+    // Update occupancy counter
+    const liveOccupied = j.occupied;
+    occupancyValue.textContent = `${liveOccupied} / ${j.capacity}`;
+    occupancyValue.className = "fs-3 fw-bold " + (liveOccupied < 6 ? "occupancy-green" : liveOccupied < 11 ? "occupancy-yellow" : "occupancy-red");
 
-  // Booking form submit
-  document.getElementById("bookingForm").addEventListener("submit", async e=>{
+    // Match Day info
+    if (j.match_start && j.match_end) {
+        matchDayNotice.style.display = 'block';
+        matchInfo.style.display = 'block';
+        matchInfo.textContent = `Match during the following slot : ${j.match_start} – ${j.match_end}`;
+    } else {
+        matchDayNotice.style.display = 'none';
+        matchInfo.style.display = 'none';
+    }
+    populateStartTimes(j);
+
+    // Display warning below booking form for partially configured matches
+    const bookingWarningEl = document.getElementById('bookingWarning');
+    if(!bookingWarningEl){
+        const form = document.getElementById('bookingForm');
+        const div = document.createElement('div');
+        div.id = 'bookingWarning';
+        div.className = 'text-warning fw-bold mb-2';
+        form.prepend(div);
+    }
+
+    const warningDiv = document.getElementById('bookingWarning');
+    if(j.match_start && j.match_end && j.occupied < j.capacity){
+        warningDiv.textContent = `⚠️ Partial match in progress: ${j.match_start} – ${j.match_end}. Slots may fill quickly!`;
+        warningDiv.style.display = 'block';
+    } else {
+        warningDiv.style.display = 'none';
+    }
+}
+
+
+
+  // Form submission
+  document.getElementById('bookingForm').addEventListener('submit', async (e)=>{
     e.preventDefault();
-
-    const player = playerSelect.value === "other" ? playerExternal.value.trim() : playerSelect.value;
-    if(!player){ alert("Please enter player name"); return; }
-
-    const partner = partnerSelect.value === "other" ? (partnerExternal.value.trim() || null) : partnerSelect.value || null;
-
-    const formData = new FormData();
-    formData.append("player", player);
-    formData.append("partner", partner);
-    formData.append("day", dayInput.value);
-    formData.append("start", startSelect.value);
-    formData.append("end", endSelect.value);
-
-    const resp = await fetch("/book",{method:"POST", body: formData});
-    const j = await resp.json();
-    if(j.ok){
-      e.target.reset();
-      playerExternal.style.display="none";
-      partnerExternal.style.display="none";
-      populateStartTimes();
-      await loadBookings();
-      showUserPopup();
-    } else alert(j.error);
+    const player=(playerSelect.value==='other')?playerExternal.value.trim():playerSelect.value;
+    if(!player){alert('Please enter player name');return;}
+    let partner=(partnerSelect.value==='other')?partnerExternal.value.trim()||null:partnerSelect.value||null;
+    let partnerToSend = partner || `None-${Date.now()}-${Math.floor(Math.random()*10000)}`;
+    const fd=new FormData();
+    fd.append('player',player); fd.append('partner',partnerToSend);
+    fd.append('day',dayInput.value); fd.append('start',startSelect.value); fd.append('end',endSelect.value);
+    const resp=await fetch('/book',{method:'POST',body:fd}); const j=await resp.json();
+    if(j.ok){ document.getElementById('bookingForm').reset(); playerExternal.style.display='none'; partnerExternal.style.display='none'; await loadBookings(); await loadOccupancy(); new bootstrap.Modal(document.getElementById('userPopup')).show(); }
+    else alert(j.error||'Booking failed');
   });
 
-  window.checkin=async id=>{await fetch("/checkin",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({booking_id:id})});await loadBookings();await loadOccupancy();}
-  window.checkout=async id=>{await fetch("/checkout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({booking_id:id})});await loadBookings();await loadOccupancy();}
-  window.deleteBooking=async id=>{await fetch("/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({booking_id:id})});await loadBookings();await loadOccupancy();}
+  window.checkin=async id=>{ await fetch('/checkin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({booking_id:id})}); await loadBookings(); await loadOccupancy(); };
+  window.checkout=async id=>{ await fetch('/checkout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({booking_id:id})}); await loadBookings(); await loadOccupancy(); };
+  window.deleteBooking=async id=>{ await fetch('/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({booking_id:id})}); await loadBookings(); await loadOccupancy(); };
 
   {% if is_admin %}
-  const matchCheck=document.getElementById("match_day");
-  const extraCheck=document.getElementById("extra_table");
-  const second_matchCheck=document.getElementById("second_match");
-  const second_match_extra_tableCheck=document.getElementById("second_match_extra_table");
-
-  function updateCheckboxState() {
-      const enabled = matchCheck.checked;
-      extraCheck.disabled = !enabled;
-      second_matchCheck.disabled = !enabled;
-      second_match_extra_tableCheck.disabled = !enabled;
-      if(!enabled){
-          extraCheck.checked=false;
-          second_matchCheck.checked=false;
-          second_match_extra_tableCheck.checked=false;
-      }
-  }
-
-  async function updateSettings() {
-      await fetch("/update-settings", {
-          method:"POST",
-          headers:{"Content-Type":"application/json"},
-          body: JSON.stringify({
-              match_day: matchCheck.checked,
-              extra_table: extraCheck.checked,
-              second_match: second_matchCheck.checked,
-              second_match_extra_table: second_match_extra_tableCheck.checked
-          })
-      });
-      await loadOccupancy();
-  }
-
-  updateCheckboxState();
-  matchCheck.addEventListener("change", ()=>{updateCheckboxState(); updateSettings();});
-  extraCheck.addEventListener("change", updateSettings);
-  second_matchCheck.addEventListener("change", updateSettings);
-  second_match_extra_tableCheck.addEventListener("change", updateSettings);
+  document.getElementById('save_settings').addEventListener('click', async ()=>{
+    const payload={
+      match_day:document.getElementById('match_day').checked,
+      match_start:document.getElementById('match_start').value||"",
+      match_end:document.getElementById('match_end').value||"",
+      extra_table:document.getElementById('extra_table').checked,
+      second_match:document.getElementById('second_match').checked,
+      second_match_extra_table:document.getElementById('second_match_extra_table').checked
+    };
+    await fetch('/update-settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    await loadOccupancy(); await loadBookings();
+  });
   {% endif %}
 
   loadBookings();
   loadOccupancy();
-  setInterval(loadOccupancy,5000);
+  setInterval(loadOccupancy, 5000); // live update even during match day
 });
 </script>
 
-<footer class="text-center mt-5 mb-3 text-muted" style="font-size: 0.9rem;">
+<footer class="text-center mt-5 mb-3 text-muted" style="font-size:0.9rem;">
   © Copyright 2025 <br>
   Luca F.Caldesi (<a href="mailto:lfcaldesi@gmail.com">lfcaldesi@gmail.com</a>)
 </footer>
