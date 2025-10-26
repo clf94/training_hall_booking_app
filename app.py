@@ -4,6 +4,7 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 import os
 import json
+import requests
 from datetime import date, datetime, time as dt_time, timedelta
 from sqlalchemy import and_, or_
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -22,7 +23,25 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///bookings.db'
 db = SQLAlchemy(app)
 
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
+WEB_HOOK_N8N_URL = os.getenv("WEB_HOOK_N8N_URL")
 
+def notify_n8n(booking):
+    webhook_url = WEB_HOOK_N8N_URL
+    try:
+     # ensure all values are JSON-serializable
+        safe_booking = {
+            "player": booking.player,
+            "partner": booking.partner,
+            "day": str(booking.day),
+            "start": booking.start.strftime("%H:%M") if hasattr(booking.start, "strftime") else str(booking.start),
+            "end": booking.end.strftime("%H:%M") if hasattr(booking.end, "strftime") else str(booking.end),
+        }
+        response = requests.post(webhook_url, json=safe_booking)
+        print("Webhook sent:", response.status_code, response.text)
+    except Exception as e:
+        print("Webhook failed:", e)
+        
+        
 def parse_hm_to_timeobj(hm: str):
     """Parse 'HH:MM' into a datetime.time object."""
     if not hm:
@@ -258,7 +277,9 @@ def book():
 
     new_booking = Booking(player=player, partner=partner, day=day, start=start, end=end, created_at=datetime.now(ZURICH_TZ))
     db.session.add(new_booking)
+
     db.session.commit()
+    notify_n8n(new_booking)
     return jsonify({"ok": True,"message":"Booking successful!"})
 
 @app.route("/checkin", methods=["POST"])
