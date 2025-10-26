@@ -3,10 +3,15 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from dotenv import load_dotenv
 import os
+import json
 from datetime import date, datetime, time as dt_time, timedelta
 from sqlalchemy import and_, or_
 from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime, date, timedelta
+from datetime import datetime, time, date
+from zoneinfo import ZoneInfo
+
+ZURICH_TZ = ZoneInfo("Europe/Zurich")
 
 
 load_dotenv()
@@ -16,7 +21,32 @@ CORS(app)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///bookings.db'
 db = SQLAlchemy(app)
 
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
+
+def parse_hm_to_timeobj(hm: str):
+    """Parse 'HH:MM' into a datetime.time object."""
+    if not hm:
+        return None
+    try:
+        h, m = map(int, hm.split(":"))
+        return dt_time(h, m)
+    except ValueError:
+        return None
+
+
+def time_in_range(start: dt_time, end: dt_time, now: dt_time):
+    """Return True if now is between start and end (handles overnight ranges)."""
+    if not start or not end:
+        return False
+    if start <= end:
+        return start <= now < end
+    return now >= start or now < end
+
+
+def zurich_now():
+    """Return current Zurich datetime (timezone aware)."""
+    return datetime.now(ZURICH_TZ)
+
 
 class Booking(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -26,8 +56,8 @@ class Booking(db.Model):
     start = db.Column(db.String(5))
     end = db.Column(db.String(5))
     status = db.Column(db.String(20), default="booked")
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)  # booking creation timestamp
-    checked_in_at = db.Column(db.DateTime, nullable=True)          # check-in timestamp
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(ZURICH_TZ))
+    checked_in_at = db.Column(db.DateTime, nullable=True) 
 
 
 class Settings(db.Model):
@@ -39,22 +69,12 @@ class Settings(db.Model):
     match_start = db.Column(db.String(5), nullable=True)
     match_end = db.Column(db.String(5), nullable=True)
 
-users = [
-    "Albus, Lennart","Angelini, Giacomo","Bamil, Aradhya","Basu, Soumya","Batinic, Danijel",
-    "Beranek, Peter","Bhardwaj, Akshat Kumar","Bosshard, Nicolas","Bradac, Domagoj","Braun, Jacob Martin",
-    "Bulmak, Munzur","Caldesi, Luca Francesco","Cassanelli, Carlo","Chen, Manyu","Chernik, Vitaly",
-    "Couto, Yago","Dai, Xi","De Belder, Audrey","Di Michino, Giorgio","Distler, Jacob","Frey, Rolf",
-    "Foerster, Eva","Fuchs, Laurin","Geiger, Margit","Grunder, Michael","Hala, Michael","Hanzawa, Michiru",
-    "Hillmann, Matthias","Hou, Jyun Yu","Huang, Yixin","Koop, Olga","König, Markus","Kull, Eric",
-    "Lai, Xiaotong","Lemke, Meinolf","Li, Yuchen","Loo, Christopher T","Loo, Natascha","Loosli, Dominik",
-    "Maier, Florin","Main, Maximilian","Matuschek, Nicolai","Mazloumian, Amin Seyed","Müsing, Andreas",
-    "Nemes, Olga","Norden, Jens","Ondis, Jozef Jun","Paliwal, Saurabh","Parkitny, Lisa","Pereira, Cesar",
-    "Potoplyak, Grygoriy","Protsch, Florian","Queudot, Florent","Reichle, Indira","Rouger, Robin",
-    "Rupp, Samuel","Salleras Hanzawa, Kei","Scalari, Giorgio","Schaffler, Alois","Schinz, Hanspeter",
-    "Schlenger, Jonas","Schwarz, Peter","Sergueev, Pyotr","Sertcan Gökmen, Belize","Sieber, Nick",
-    "Sitt, Axel","Sladek, Samuel","Steiger, Marion","Stroh-Desler, Jens","Tomcak, Ladislav","Trtik, Lukas",
-    "Waschkies, Jannes","Wei, Lin Yun","Wei, Ruoqi","Zech, Damian","Zhang, Yong","Zhu, Qifeng","Zurfluh, Ursula"
-]
+def load_users():
+    users_file = os.path.join(os.path.dirname(__file__), "users.json")
+    with open(users_file, "r", encoding="utf-8") as f:
+        users = json.load(f)
+    return sorted(users)  # returns alphabetically sorted list
+
 
 @app.before_request
 def load_settings():
@@ -65,6 +85,7 @@ def load_settings():
 
 @app.route("/")
 def index():
+    users = load_users()
     settings = Settings.query.first()
     return render_template(
         "index.html",
@@ -112,6 +133,7 @@ def bookings():
             "status": b.status,
             "created_at": b.created_at.isoformat() if b.created_at else None,
             "checked_in_at": b.checked_in_at.isoformat() if b.checked_in_at else None
+
         })
     return jsonify(data)
 
@@ -129,7 +151,7 @@ def time_in_range(start: dt_time, end: dt_time, now: dt_time):
 
 @app.route("/occupancy")
 def occupancy():
-    today_iso = date.today().isoformat()
+    today_iso = datetime.now(ZURICH_TZ).date().isoformat()
     bookings = Booking.query.filter_by(day=today_iso, status="checked-in").all()
     occupied = 0
     for b in bookings:
@@ -143,7 +165,7 @@ def occupancy():
     second_match_flag = False
     second_match_extra_table_flag = False
 
-    now_time = datetime.now().time()
+    now_time = datetime.now(ZURICH_TZ).time()
     if settings and settings.match_day and settings.match_start and settings.match_end:
         m_start = parse_hm_to_timeobj(settings.match_start)
         m_end = parse_hm_to_timeobj(settings.match_end)
@@ -185,9 +207,17 @@ def book():
     day = request.form["day"]
     start = request.form["start"]
     end = request.form["end"]
-    now = datetime.now()
+    now = datetime.now(ZURICH_TZ)
     try:
-        booking_time = datetime.combine(date.fromisoformat(day), datetime.strptime(start,"%H:%M").time())
+        booking_time = datetime(
+    year=int(day[:4]),
+    month=int(day[5:7]),
+    day=int(day[8:]),
+    hour=int(start[:2]),
+    minute=int(start[3:]),
+    tzinfo=ZURICH_TZ
+)
+
     except:
         return jsonify({"ok": False, "error":"Invalid date/time."})
     if booking_time < now:
@@ -226,7 +256,7 @@ def book():
     if conflict_query.first():
        return jsonify({"ok": False, "error":"Player or partner already booked in this slot."})
 
-    new_booking = Booking(player=player, partner=partner, day=day, start=start, end=end)
+    new_booking = Booking(player=player, partner=partner, day=day, start=start, end=end, created_at=datetime.now(ZURICH_TZ))
     db.session.add(new_booking)
     db.session.commit()
     return jsonify({"ok": True,"message":"Booking successful!"})
@@ -237,7 +267,7 @@ def checkin():
     b = Booking.query.get(booking_id)
     if b:
         # Only allow check-in on the same day
-        if b.day != date.today().isoformat():
+        if b.day != datetime.now(ZURICH_TZ).date().isoformat():
             return jsonify({"ok": False, "error":"Check-in only allowed today."}), 400
         b.status="checked-in"
         db.session.commit()
