@@ -33,20 +33,23 @@ Includes **n8n webhook notifications** for automated alerts (e.g., via email, Te
    git clone https://github.com/clf94/training_hall_booking_app.git
    cd training-hall-booking```
 
+
 2. **Create a virtual environment and install dependencies
 ```python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt```
 
+
 3. **Set up environment variables
+
 ```FLASK_SECRET=your_secret_key
 ADMIN_PASSWORD=your_admin_password
 WEB_HOOK_N8N_URL=https://your-n8n-domain.ngrok-free.dev/webhook-test/booking-created
 ```
 
 4. **Run the application
-```python app.py
 
+```python app.py
 ```
 Then visit ```http://localhost:5009```
 

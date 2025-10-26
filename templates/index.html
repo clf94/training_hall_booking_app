@@ -6,15 +6,8 @@
 <title>Training Hall Booking</title>
 <link rel="icon" href="/static/logo.png" type="image/png">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-<style>
-  .occupancy-green { color: green; }
-  .occupancy-yellow { color: goldenrod; }
-  .occupancy-red { color: red; }
-  .logo { max-height:60px; margin-bottom:20px; }
-  .admin-section { margin-bottom:20px; }
-  .disabled-slot { text-decoration: line-through; color: gray !important; }
-  .match-info { font-size:0.9rem; color:#555; margin-bottom:0.5rem; }
-</style>
+{% include 'styles.html' %}
+
 </head>
 <body class="bg-light">
 
@@ -22,107 +15,23 @@
   <img src="/static/logo.png" class="logo" alt="logo">
   <h1>Tischtennisclub Zürich Affoltern</h1>
   {% if not is_admin %}
-    <a href="{{ url_for('admin_login') }}" class="btn btn-warning mt-2">Admin Login</a>
+    <a href="{{ url_for('admin.admin_login') }}" class="btn btn-warning mt-2">Admin Login</a>
   {% else %}
-    <a href="{{ url_for('admin_logout') }}" class="btn btn-danger mt-2">Admin Logout</a>
+    <a href="{{ url_for('admin.admin_logout') }}" class="btn btn-danger mt-2">Admin Logout</a>
   {% endif %}
 </div>
 
 {% if is_admin %}
-<div class="container admin-section">
-  <div class="card p-3 shadow-sm">
-    <h5>Admin Section</h5>
-    <div class="form-check mb-2">
-      <input type="checkbox" class="form-check-input" id="match_day" {% if match_day %}checked{% endif %}>
-      <label class="form-check-label" for="match_day">Match Day (2 tables)</label>
-    </div>
-    <div id="match_range" style="display: {% if match_day %}block{% else %}none{% endif %};">
-      <div class="row g-2">
-        <div class="col">
-          <label class="form-label">Match Start</label>
-          <select id="match_start" class="form-select"></select>
-        </div>
-        <div class="col">
-          <label class="form-label">Match End</label>
-          <select id="match_end" class="form-select"></select>
-        </div>
-      </div>
-    </div>
-
-    <div class="form-check mb-2 mt-3">
-      <input type="checkbox" class="form-check-input" id="extra_table" {% if extra_table %}checked{% endif %}>
-      <label class="form-check-label" for="extra_table">Extra Table</label>
-    </div>
-
-    <div class="form-check mb-2">
-      <input type="checkbox" class="form-check-input" id="second_match" {% if second_match %}checked{% endif %}>
-      <label class="form-check-label" for="second_match">Second Match (2 tables)</label>
-    </div>
-
-    <div class="form-check mb-2">
-      <input type="checkbox" class="form-check-input" id="second_match_extra_table" {% if second_match_extra_table %}checked{% endif %}>
-      <label class="form-check-label" for="second_match_extra_table">Extra Table for Second Match</label>
-    </div>
-
-    <button id="save_settings" class="btn btn-primary mt-2 w-100">Save Settings</button>
-  </div>
-</div>
+  {% include 'admin_section.html' %}
 {% endif %}
 
 <div class="container my-4">
   <div class="row justify-content-center">
     <div class="col-md-4 col-sm-12 mb-3">
-      <div class="card text-center p-3 shadow-sm">
-        <h5>Live Occupancy</h5>
-        <div id="occupancyValue" class="fs-3 fw-bold occupancy-green">0 / 12</div>
-        <div id="matchDayNotice" class="text-center text-primary fw-bold" style="display:none;">Match Day!</div>
-        <div id="matchInfo" class="match-info" style="display:none;"></div>
-      </div>
+      {% include 'live_occupancy.html' %}
     </div>
-
     <div class="col-md-8 col-sm-12">
-      <div class="card p-3 shadow-sm">
-        <h5 class="mb-3">Book a Session</h5>
-
-        <form id="bookingForm">
-          <div class="mb-2">
-            <label class="form-label">Player</label>
-            <select id="player" name="player" class="form-select" required>
-              <option value="">-- Select player --</option>
-              {% for u in users %}<option value="{{ u }}">{{ u }}</option>{% endfor %}
-              <option value="other">Other</option>
-            </select>
-            <input type="text" id="player_external" placeholder="Enter player name" class="form-control mt-1" style="display:none;" />
-          </div>
-
-          <div class="mb-2">
-            <label class="form-label">Partner</label>
-            <select id="partner" name="partner" class="form-select">
-              <option value="">-- None --</option>
-              {% for u in users %}<option value="{{ u }}">{{ u }}</option>{% endfor %}
-              <option value="other">Other</option>
-            </select>
-            <input type="text" id="partner_external" placeholder="Enter partner name" class="form-control mt-1" style="display:none;" />
-          </div>
-
-          <div class="mb-2">
-            <label class="form-label">Day</label>
-            <select id="day" name="day" class="form-select" required></select>
-          </div>
-
-          <div class="mb-2">
-            <label class="form-label">Start Time</label>
-            <select id="start" name="start" class="form-select" required></select>
-          </div>
-
-          <div class="mb-3">
-            <label class="form-label">End Time</label>
-            <select id="end" name="end" class="form-select" required></select>
-          </div>
-
-          <button type="submit" id="submitBtn" class="btn btn-primary w-100">Book</button>
-        </form>
-      </div>
+      {% include 'book_session.html' %}
     </div>
   </div>
 </div>
@@ -134,22 +43,7 @@
     <div id="bookings-tomorrow"></div>
 </div>
 
-
-<div class="modal fade" id="userPopup" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content text-center">
-      <div class="modal-header bg-primary text-white">
-        <h5 class="modal-title">Booking successful!</h5>
-      </div>
-      <div class="modal-body">
-        If you want to cancel your booking, please contact an admin.
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary w-100" data-bs-dismiss="modal">OK</button>
-      </div>
-    </div>
-  </div>
-</div>
+{% include 'booking_modal.html' %}
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
@@ -470,10 +364,7 @@ async function loadBookings() {
 });
 </script>
 
-<footer class="text-center mt-5 mb-3 text-muted" style="font-size:0.9rem;">
-  © Copyright 2025 <br>
-  Luca F.Caldesi (<a href="mailto:lfcaldesi@gmail.com">lfcaldesi@gmail.com</a>)
-</footer>
+{% include 'footer.html' %}
 </body>
 </html>
 

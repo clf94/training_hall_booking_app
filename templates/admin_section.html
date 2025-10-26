@@ -1,0 +1,38 @@
+<div class="container admin-section">
+  <div class="card p-3 shadow-sm">
+    <h5>Admin Section</h5>
+    <div class="form-check mb-2">
+      <input type="checkbox" class="form-check-input" id="match_day" {% if match_day %}checked{% endif %}>
+      <label class="form-check-label" for="match_day">Match Day (2 tables)</label>
+    </div>
+    <div id="match_range" style="display: {% if match_day %}block{% else %}none{% endif %};">
+      <div class="row g-2">
+        <div class="col">
+          <label class="form-label">Match Start</label>
+          <select id="match_start" class="form-select"></select>
+        </div>
+        <div class="col">
+          <label class="form-label">Match End</label>
+          <select id="match_end" class="form-select"></select>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-check mb-2 mt-3">
+      <input type="checkbox" class="form-check-input" id="extra_table" {% if extra_table %}checked{% endif %}>
+      <label class="form-check-label" for="extra_table">Extra Table</label>
+    </div>
+
+    <div class="form-check mb-2">
+      <input type="checkbox" class="form-check-input" id="second_match" {% if second_match %}checked{% endif %}>
+      <label class="form-check-label" for="second_match">Second Match (2 tables)</label>
+    </div>
+
+    <div class="form-check mb-2">
+      <input type="checkbox" class="form-check-input" id="second_match_extra_table" {% if second_match_extra_table %}checked{% endif %}>
+      <label class="form-check-label" for="second_match_extra_table">Extra Table for Second Match</label>
+    </div>
+
+    <button id="save_settings" class="btn btn-primary mt-2 w-100">Save Settings</button>
+  </div>
+</div>
