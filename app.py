@@ -233,7 +233,7 @@ def book():
 
         if intersects(u_start,u_end,m_start,m_end):
             full_match = s.match_day and s.extra_table and s.second_match and s.second_match_extra_table
-            if full_match:
+            if (full_match and s.match_day == date.today().isoformat()):
                 return jsonify({"ok": False, "error":"This slot is fully reserved for match. Choose another time."})
 
     # --- Conflict check ---

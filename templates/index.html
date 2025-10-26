@@ -20,7 +20,7 @@
 
 <div class="container my-4 text-center">
   <img src="/static/logo.png" class="logo" alt="logo">
-  <h1>Tischtennisclub Zürich Affoltern1</h1>
+  <h1>Tischtennisclub Zürich Affoltern</h1>
   {% if not is_admin %}
     <a href="{{ url_for('admin_login') }}" class="btn btn-warning mt-2">Admin Login</a>
   {% else %}
@@ -127,8 +127,13 @@
   </div>
 </div>
 <hr>
+
 <h3 class="text-center">Bookings</h3>
-<div id="bookings" class="container mb-5"></div>
+<div id="bookings" class="container mb-5">
+    <div id="bookings-today"></div>
+    <div id="bookings-tomorrow"></div>
+</div>
+
 
 <div class="modal fade" id="userPopup" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
@@ -220,11 +225,12 @@ function populateStartTimes(occupancy) {
       opt.disabled = true;
       opt.classList.add('disabled-slot');
     }
-
+const todayStr = isoToday();
     // 🛑 Disable only if match is on the same day and full
     if (
       occupancy &&
-      occupancy.match_day === selectedDay &&
+      occupancy.match_day &&
+	  selectedDay == todayStr&&
       occupancy.match_start &&
       occupancy.match_end
     ) {
@@ -292,16 +298,18 @@ function updateEnd() {
     // 🛑 Disable only if match is on the same day and full
     if (
       lastOccupancy &&
-      lastOccupancy.match_day === selectedDay &&
+      lastOccupancy.match_day &&
+      selectedDay === today &&
       lastOccupancy.match_start &&
       lastOccupancy.match_end
     ) {
-      const inRange = t > lastOccupancy.match_start && t <= lastOccupancy.match_end;
-      if (inRange && lastOccupancy.occupied >= lastOccupancy.capacity) {
-        opt.disabled = true;
-        opt.classList.add('disabled-slot');
-      }
-    }
+  const inRange = t > lastOccupancy.match_start && t <= lastOccupancy.match_end;
+  if (inRange && lastOccupancy.occupied >= lastOccupancy.capacity) {
+    opt.disabled = true;
+    opt.classList.add('disabled-slot');
+  }
+}
+
 
     if (!opt.disabled) allDisabled = false;
     endSelect.append(opt);
@@ -346,35 +354,64 @@ function clearBookingWarning() {
   if (warning) warning.style.display = 'none';
 }
 
-  async function loadBookings(){
-    const res=await fetch('/bookings?t='+Date.now());
-    const list=await res.json();
-    bookingsContainer.innerHTML=list.length?"":"<p class='text-center text-muted'>No bookings yet</p>";
-    const todayStr = isoToday();
 
-    list.forEach(b=>{
-      const card=document.createElement('div'); 
-      card.className='card p-2 mb-2 shadow-sm';
-      const partnerText=b.partner?b.partner:"(no partner)";
-      
-      const bookedTime = b.created_at ? new Date(b.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : 'Unknown';
-      const checkinTime = b.checked_in_at ? ` | Checked in: ${new Date(b.checked_in_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}` : '';
-      const timeText = `(${b.start}–${b.end} — Booked at: ${bookedTime}${checkinTime})`;
+async function loadBookings() {
+    const res = await fetch('/bookings?t=' + Date.now());
+    const list = await res.json();
 
-      let buttons='';
-      const bookingDay = b.day;
-      const isFuture = bookingDay > todayStr;
-      if(b.status==='booked') buttons+=`<button class="btn btn-success btn-sm me-2" ${isFuture ? 'disabled title="Cannot check in for future days"' : `onclick="checkin(${b.booking_id})"`}>Check-in</button>`;
-      if(b.status==='checked-in') buttons+=`<button class="btn btn-warning btn-sm me-2" onclick="checkout(${b.booking_id})">Checkout</button>`;
-      {% if is_admin %} buttons+=`<button class="btn btn-danger btn-sm" onclick="deleteBooking(${b.booking_id})">Delete</button>`; {% endif %}
+    const todayStr = new Date().toISOString().split('T')[0];
+    const tomorrowDate = new Date(); 
+    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+    const tomorrowStr = tomorrowDate.toISOString().split('T')[0];
 
-      card.innerHTML=`<div><b>${b.player} </b> <i>${timeText}<i> + ${partnerText}</div>
-                <div>Booked for: ${b.day}</div>
-                <div>Status: <b>${b.status}</b></div>
-                <div class="mt-2">${buttons}</div>`;
-      bookingsContainer.appendChild(card);
-    });
-  }
+    const todayContainer = document.getElementById('bookings-today');
+    const tomorrowContainer = document.getElementById('bookings-tomorrow');
+
+    todayContainer.innerHTML = '';
+    tomorrowContainer.innerHTML = '';
+
+    const todayBookings = list.filter(b => b.day === todayStr)
+                              .sort((a,b) => a.start.localeCompare(b.start));
+    const tomorrowBookings = list.filter(b => b.day === tomorrowStr)
+                                 .sort((a,b) => a.start.localeCompare(b.start));
+
+    function renderBooking(b, container){
+        const card = document.createElement('div'); 
+        card.className = 'card p-2 mb-2 shadow-sm';
+        const partnerText = b.partner ? b.partner : "(no partner)";
+        const bookedTime = b.created_at ? new Date(b.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : 'Unknown';
+        const checkinTime = b.checked_in_at ? ` | Checked in: ${new Date(b.checked_in_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}` : '';
+        const timeText = `(${b.start}–${b.end} — Booked at: ${bookedTime}${checkinTime})`;
+
+        let buttons = '';
+        const isFuture = b.day > todayStr;
+        if(b.status==='booked') buttons += `<button class="btn btn-success btn-sm me-2" ${isFuture ? 'disabled title="Cannot check in for future days"' : `onclick="checkin(${b.booking_id})"`}>Check-in</button>`;
+        if(b.status==='checked-in') buttons += `<button class="btn btn-warning btn-sm me-2" onclick="checkout(${b.booking_id})">Checkout</button>`;
+        {% if is_admin %} buttons += `<button class="btn btn-danger btn-sm" onclick="deleteBooking(${b.booking_id})">Delete</button>`; {% endif %}
+
+        card.innerHTML = `<div><b>${b.player} </b> <i>${timeText}<i> + ${partnerText}</div>
+                          <div>Booked for: ${b.day}</div>
+                          <div>Status: <b>${b.status}</b></div>
+                          <div class="mt-2">${buttons}</div>`;
+        container.appendChild(card);
+    }
+
+    if(todayBookings.length > 0){
+        todayContainer.innerHTML = '<h5>Today</h5>';
+        todayBookings.forEach(b => renderBooking(b, todayContainer));
+    }
+
+    if(tomorrowBookings.length > 0){
+        tomorrowContainer.innerHTML = '<h5 class="mt-3">Tomorrow</h5>';
+        tomorrowBookings.forEach(b => renderBooking(b, tomorrowContainer));
+    }
+
+    if(todayBookings.length === 0 && tomorrowBookings.length === 0){
+        todayContainer.innerHTML = "<p class='text-center text-muted'>No bookings yet</p>";
+    }
+}
+
+
 
   async function loadOccupancy(){
     const res=await fetch('/occupancy?t='+Date.now());
@@ -439,3 +476,4 @@ function clearBookingWarning() {
 </footer>
 </body>
 </html>
+
