@@ -202,65 +202,149 @@ document.addEventListener('DOMContentLoaded', () => {
   function nowTime(){ return new Date().toTimeString().slice(0,5); }
   let lastOccupancy=null;
 
-function populateStartTimes(occupancy){
-    lastOccupancy = occupancy;
-    const prevStart = startSelect.value; // save previous selection
-    startSelect.innerHTML = '';
-    const today = isoToday();
-    const now = nowTime();
-    const startSlots = slots.slice(0, slots.length - 1);
+function populateStartTimes(occupancy) {
+  lastOccupancy = occupancy;
+  const prevStart = startSelect.value;
+  startSelect.innerHTML = '';
+  const today = isoToday();
+  const selectedDay = daySelect.value;
+  const now = nowTime();
+  const startSlots = slots.slice(0, slots.length - 1);
+  let allDisabled = true;
 
-    startSlots.forEach(t=>{
-      const opt = new Option(t, t);
-      if(daySelect.value===today && t<=now){ opt.disabled=true; opt.classList.add('disabled-slot'); }
-      if(occupancy && occupancy.match_day && occupancy.match_start && occupancy.match_end){
-        const inRange=(t>=occupancy.match_start && t<occupancy.match_end);
-        if(inRange && occupancy.occupied>=occupancy.capacity){ opt.disabled=true; opt.classList.add('disabled-slot'); }
+  startSlots.forEach(t => {
+    const opt = new Option(t, t);
+
+    // Disable past times today
+    if (selectedDay === today && t <= now) {
+      opt.disabled = true;
+      opt.classList.add('disabled-slot');
+    }
+
+    // 🛑 Disable only if match is on the same day and full
+    if (
+      occupancy &&
+      occupancy.match_day === selectedDay &&
+      occupancy.match_start &&
+      occupancy.match_end
+    ) {
+      const inRange = t >= occupancy.match_start && t < occupancy.match_end;
+      if (inRange && occupancy.occupied >= occupancy.capacity) {
+        opt.disabled = true;
+        opt.classList.add('disabled-slot');
       }
-      startSelect.append(opt);
-    });
-
-    const valid = Array.from(startSelect.options).some(o=>!o.disabled);
-    if(!valid){
-      startSelect.innerHTML='<option disabled selected>No available start times</option>';
-      endSelect.innerHTML='<option disabled selected>No available end times</option>';
-      submitBtn.disabled=true;
-      return;
     }
 
-    // Keep previous selection if still valid
-    const stillValid = Array.from(startSelect.options).some(o=>o.value===prevStart && !o.disabled);
-    if(stillValid){
-      startSelect.value = prevStart;
-    } else {
-      startSelect.selectedIndex = Array.from(startSelect.options).findIndex(o=>!o.disabled);
-    }
+    if (!opt.disabled) allDisabled = false;
+    startSelect.append(opt);
+  });
 
-    submitBtn.disabled=false;
-    updateEnd();
+  if (allDisabled) {
+    startSelect.innerHTML =
+      '<option disabled selected>No available start times</option>';
+    endSelect.innerHTML =
+      '<option disabled selected>No available end times</option>';
+    submitBtn.disabled = true;
+
+    if (occupancy && occupancy.match_day === selectedDay)
+      showBookingWarning('⚠️ Match fully booked for this time range. Booking not possible.');
+    else clearBookingWarning();
+
+    return;
+  } else {
+    clearBookingWarning();
+  }
+
+  const stillValid = Array.from(startSelect.options).some(
+    o => o.value === prevStart && !o.disabled
+  );
+  if (stillValid) {
+    startSelect.value = prevStart;
+  } else {
+    startSelect.selectedIndex = Array.from(startSelect.options).findIndex(
+      o => !o.disabled
+    );
+  }
+
+  submitBtn.disabled = false;
+  updateEnd();
 }
 
+function updateEnd() {
+  endSelect.innerHTML = '';
+  if (startSelect.selectedIndex === -1) return;
 
-  function updateEnd(){
-    endSelect.innerHTML='';
-    if(startSelect.selectedIndex===-1) return;
-    const chosenStart = startSelect.value;
-    slots.forEach(t=>{
-      if(t<=chosenStart) return;
-      const opt=new Option(t,t);
-      if(daySelect.value===isoToday() && t<=nowTime()){ opt.disabled=true; opt.classList.add('disabled-slot'); }
-      if(lastOccupancy && lastOccupancy.match_day && lastOccupancy.match_start && lastOccupancy.match_end){
-        const inRange=(t>lastOccupancy.match_start && t<=lastOccupancy.match_end);
-        if(inRange && lastOccupancy.occupied>=lastOccupancy.capacity){ opt.disabled=true; opt.classList.add('disabled-slot'); }
+  const chosenStart = startSelect.value;
+  const today = isoToday();
+  const selectedDay = daySelect.value;
+  const now = nowTime();
+  let allDisabled = true;
+
+  slots.forEach(t => {
+    if (t <= chosenStart) return;
+    const opt = new Option(t, t);
+
+    if (selectedDay === today && t <= now) {
+      opt.disabled = true;
+      opt.classList.add('disabled-slot');
+    }
+
+    // 🛑 Disable only if match is on the same day and full
+    if (
+      lastOccupancy &&
+      lastOccupancy.match_day === selectedDay &&
+      lastOccupancy.match_start &&
+      lastOccupancy.match_end
+    ) {
+      const inRange = t > lastOccupancy.match_start && t <= lastOccupancy.match_end;
+      if (inRange && lastOccupancy.occupied >= lastOccupancy.capacity) {
+        opt.disabled = true;
+        opt.classList.add('disabled-slot');
       }
-      endSelect.append(opt);
-    });
-    const valid=Array.from(endSelect.options).some(o=>!o.disabled);
-    if(!valid){ endSelect.innerHTML='<option disabled selected>No available end times</option>'; submitBtn.disabled=true; return; }
-    endSelect.selectedIndex=Array.from(endSelect.options).findIndex(o=>!o.disabled);
-    submitBtn.disabled=false;
+    }
+
+    if (!opt.disabled) allDisabled = false;
+    endSelect.append(opt);
+  });
+
+  if (allDisabled) {
+    endSelect.innerHTML =
+      '<option disabled selected>No available end times</option>';
+    submitBtn.disabled = true;
+
+    if (lastOccupancy && lastOccupancy.match_day === selectedDay)
+      showBookingWarning('⚠️ Match fully booked for this time range. Booking not possible.');
+    else clearBookingWarning();
+
+    return;
+  } else {
+    clearBookingWarning();
   }
-  startSelect.addEventListener('change', updateEnd);
+
+  endSelect.selectedIndex = Array.from(endSelect.options).findIndex(
+    o => !o.disabled
+  );
+  submitBtn.disabled = false;
+}
+
+// ⚠️ Helper functions
+function showBookingWarning(msg) {
+  let warning = document.getElementById('bookingWarning');
+  if (!warning) {
+    const form = document.getElementById('bookingForm');
+    warning = document.createElement('div');
+    warning.id = 'bookingWarning';
+    warning.className = 'text-danger fw-bold mb-2';
+    form.prepend(warning);
+  }
+  warning.textContent = msg;
+  warning.style.display = 'block';
+}
+
+function clearBookingWarning() {
+  const warning = document.getElementById('bookingWarning');
+  if (warning) warning.style.display = 'none';
+}
 
   async function loadBookings(){
     const res=await fetch('/bookings?t='+Date.now());

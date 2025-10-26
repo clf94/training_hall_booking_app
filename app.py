@@ -5,6 +5,8 @@ from dotenv import load_dotenv
 import os
 from datetime import date, datetime, time as dt_time, timedelta
 from sqlalchemy import and_, or_
+from apscheduler.schedulers.background import BackgroundScheduler
+from datetime import datetime, date, timedelta
 
 
 load_dotenv()
@@ -275,6 +277,21 @@ def update_settings():
     s.match_end = payload.get("match_end","")
     db.session.commit()
     return jsonify({"ok": True})
+    
+def cleanup_old_bookings():
+    with app.app_context():
+        today = date.today().isoformat()
+        deleted = Booking.query.filter(Booking.day < today).delete()
+        db.session.commit()
+        if deleted:
+            print(f"[{datetime.now()}] Cleaned up {deleted} old bookings.")
+        else:
+            print(f"[{datetime.now()}] No old bookings to clean.")
+
+scheduler = BackgroundScheduler()
+# Run cleanup daily at 00:05
+scheduler.add_job(cleanup_old_bookings, 'cron', hour=0, minute=5)
+scheduler.start()    
 
 if __name__=="__main__":
    with app.app_context(): db.create_all()
