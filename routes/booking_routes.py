@@ -78,10 +78,6 @@ def book_route():
         player = request.form.get("player", "").strip()
         if not player:
             return jsonify({"ok": False, "error": "Player missing."})
-        if player == "other":
-            player = request.form.get("player_external", "").strip()
-            if not player:
-                return jsonify({"ok": False, "error": "Please enter player name."})
 
         partner = request.form.get("partner")
         if partner == "other":
@@ -95,12 +91,30 @@ def book_route():
         if not day or not start or not end:
             return jsonify({"ok": False, "error": "Missing date/time."})
 
-        booking_time_naive = datetime.strptime(f"{day} {start}", "%Y-%m-%d %H:%M")
-        booking_time = booking_time_naive.replace(tzinfo=ZURICH_TZ)
+        # Convert to datetime
+        booking_start = datetime.strptime(f"{day} {start}", "%Y-%m-%d %H:%M")
+        booking_end = datetime.strptime(f"{day} {end}", "%Y-%m-%d %H:%M")
+        booking_time = booking_start.replace(tzinfo=ZURICH_TZ)
         now = zurich_now()
         if booking_time < now:
             return jsonify({"ok": False, "error": "Cannot book past slots."})
 
+        # Check existing bookings for this player on that day
+        player_bookings = Booking.query.filter(
+            Booking.day == day,
+            or_(Booking.player == player, Booking.partner == player)
+        ).all()
+
+        booked_minutes = sum(
+            (datetime.strptime(b.end, "%H:%M") - datetime.strptime(b.start, "%H:%M")).seconds // 60
+            for b in player_bookings
+        )
+
+        new_booking_minutes = (booking_end - booking_start).seconds // 60
+        if booked_minutes + new_booking_minutes > 60:
+            return jsonify({"ok": False, "error": "Booking exceeds 1 hour limit per day for this player."})
+
+        # Conflict check for overlapping slots
         conflict_query = Booking.query.filter(
             Booking.day == day,
             or_(
@@ -118,6 +132,7 @@ def book_route():
         if conflict_query.first():
             return jsonify({"ok": False, "error": "Player or partner already booked in this slot."})
 
+        # Save booking
         new_booking = Booking(player=player, partner=partner, day=day, start=start, end=end)
         db.session.add(new_booking)
         db.session.commit()
@@ -127,6 +142,7 @@ def book_route():
     except Exception as e:
         print("Booking error:", e)
         return jsonify({"ok": False, "error": "Server error. Check input."})
+
 
 @booking_bp.route("/checkin", methods=["POST"])
 def checkin_route():
