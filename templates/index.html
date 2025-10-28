@@ -7,7 +7,6 @@
 <link rel="icon" href="/static/logo.png" type="image/png">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 {% include 'styles.html' %}
-
 </head>
 <body class="bg-light">
 
@@ -114,25 +113,11 @@ function populateStartTimes(occupancy) {
   startSlots.forEach(t => {
     const opt = new Option(t, t);
 
-    // Disable past times today
-    if (selectedDay === today && t <= now) {
-      opt.disabled = true;
-      opt.classList.add('disabled-slot');
-    }
-const todayStr = isoToday();
-    // 🛑 Disable only if match is on the same day and full
-    if (
-      occupancy &&
-      occupancy.match_day &&
-	  selectedDay == todayStr&&
-      occupancy.match_start &&
-      occupancy.match_end
-    ) {
+    if (selectedDay === today && t <= now) { opt.disabled = true; opt.classList.add('disabled-slot'); }
+    const todayStr = isoToday();
+    if (occupancy && occupancy.match_day && selectedDay==todayStr && occupancy.match_start && occupancy.match_end){
       const inRange = t >= occupancy.match_start && t < occupancy.match_end;
-      if (inRange && occupancy.occupied >= occupancy.capacity) {
-        opt.disabled = true;
-        opt.classList.add('disabled-slot');
-      }
+      if (inRange && occupancy.occupied >= occupancy.capacity) { opt.disabled = true; opt.classList.add('disabled-slot'); }
     }
 
     if (!opt.disabled) allDisabled = false;
@@ -140,31 +125,17 @@ const todayStr = isoToday();
   });
 
   if (allDisabled) {
-    startSelect.innerHTML =
-      '<option disabled selected>No available start times</option>';
-    endSelect.innerHTML =
-      '<option disabled selected>No available end times</option>';
+    startSelect.innerHTML = '<option disabled selected>No available start times</option>';
+    endSelect.innerHTML = '<option disabled selected>No available end times</option>';
     submitBtn.disabled = true;
-
-    if (occupancy && occupancy.match_day === selectedDay)
-      showBookingWarning('⚠️ Match fully booked for this time range. Booking not possible.');
+    if (occupancy && occupancy.match_day===selectedDay) showBookingWarning('⚠️ Match fully booked for this time range. Booking not possible.');
     else clearBookingWarning();
-
     return;
-  } else {
-    clearBookingWarning();
-  }
+  } else { clearBookingWarning(); }
 
-  const stillValid = Array.from(startSelect.options).some(
-    o => o.value === prevStart && !o.disabled
-  );
-  if (stillValid) {
-    startSelect.value = prevStart;
-  } else {
-    startSelect.selectedIndex = Array.from(startSelect.options).findIndex(
-      o => !o.disabled
-    );
-  }
+  const stillValid = Array.from(startSelect.options).some(o => o.value===prevStart && !o.disabled);
+  if (stillValid) startSelect.value = prevStart;
+  else startSelect.selectedIndex = Array.from(startSelect.options).findIndex(o => !o.disabled);
 
   submitBtn.disabled = false;
   updateEnd();
@@ -184,130 +155,130 @@ function updateEnd() {
     if (t <= chosenStart) return;
     const opt = new Option(t, t);
 
-    if (selectedDay === today && t <= now) {
-      opt.disabled = true;
-      opt.classList.add('disabled-slot');
+    if (selectedDay===today && t<=now){ opt.disabled=true; opt.classList.add('disabled-slot'); }
+
+    if (lastOccupancy && lastOccupancy.match_day && selectedDay===today && lastOccupancy.match_start && lastOccupancy.match_end){
+      const inRange = t>lastOccupancy.match_start && t<=lastOccupancy.match_end;
+      if (inRange && lastOccupancy.occupied>=lastOccupancy.capacity){ opt.disabled=true; opt.classList.add('disabled-slot'); }
     }
 
-    // 🛑 Disable only if match is on the same day and full
-    if (
-      lastOccupancy &&
-      lastOccupancy.match_day &&
-      selectedDay === today &&
-      lastOccupancy.match_start &&
-      lastOccupancy.match_end
-    ) {
-  const inRange = t > lastOccupancy.match_start && t <= lastOccupancy.match_end;
-  if (inRange && lastOccupancy.occupied >= lastOccupancy.capacity) {
-    opt.disabled = true;
-    opt.classList.add('disabled-slot');
-  }
-}
-
-
-    if (!opt.disabled) allDisabled = false;
+    if (!opt.disabled) allDisabled=false;
     endSelect.append(opt);
   });
 
-  if (allDisabled) {
-    endSelect.innerHTML =
-      '<option disabled selected>No available end times</option>';
-    submitBtn.disabled = true;
-
-    if (lastOccupancy && lastOccupancy.match_day === selectedDay)
-      showBookingWarning('⚠️ Match fully booked for this time range. Booking not possible.');
+  if (allDisabled){
+    endSelect.innerHTML='<option disabled selected>No available end times</option>';
+    submitBtn.disabled=true;
+    if (lastOccupancy && lastOccupancy.match_day===selectedDay) showBookingWarning('⚠️ Match fully booked for this time range. Booking not possible.');
     else clearBookingWarning();
-
     return;
-  } else {
-    clearBookingWarning();
-  }
+  } else clearBookingWarning();
 
-  endSelect.selectedIndex = Array.from(endSelect.options).findIndex(
-    o => !o.disabled
-  );
-  submitBtn.disabled = false;
+  endSelect.selectedIndex = Array.from(endSelect.options).findIndex(o=>!o.disabled);
+  submitBtn.disabled=false;
 }
 
-// ⚠️ Helper functions
-function showBookingWarning(msg) {
-  let warning = document.getElementById('bookingWarning');
-  if (!warning) {
-    const form = document.getElementById('bookingForm');
-    warning = document.createElement('div');
-    warning.id = 'bookingWarning';
-    warning.className = 'text-danger fw-bold mb-2';
+function showBookingWarning(msg){
+  let warning=document.getElementById('bookingWarning');
+  if(!warning){
+    const form=document.getElementById('bookingForm');
+    warning=document.createElement('div');
+    warning.id='bookingWarning';
+    warning.className='text-danger fw-bold mb-2';
     form.prepend(warning);
   }
-  warning.textContent = msg;
-  warning.style.display = 'block';
+  warning.textContent=msg;
+  warning.style.display='block';
 }
 
-function clearBookingWarning() {
-  const warning = document.getElementById('bookingWarning');
-  if (warning) warning.style.display = 'none';
+function clearBookingWarning(){
+  const warning=document.getElementById('bookingWarning');
+  if(warning) warning.style.display='none';
 }
 
+function zurichDateString(dateStr){
+  const date=new Date(dateStr+"T00:00:00Z");
+  const options={weekday:'long', year:'numeric', month:'2-digit', day:'2-digit', timeZone:'Europe/Zurich'};
+  return date.toLocaleDateString('de-DE', options);
+}
 
-async function loadBookings() {
-    const res = await fetch('/bookings?t=' + Date.now());
-    const list = await res.json();
+async function loadBookings(){
+    const res=await fetch('/bookings?t='+Date.now());
+    const list=await res.json();
 
-    const todayStr = new Date().toISOString().split('T')[0];
-    const tomorrowDate = new Date(); 
-    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-    const tomorrowStr = tomorrowDate.toISOString().split('T')[0];
+    const todayStr=new Date().toLocaleDateString('en-CA', {timeZone:'Europe/Zurich'});
+    const tomorrowDate=new Date(); tomorrowDate.setDate(tomorrowDate.getDate()+1);
+    const tomorrowStr=tomorrowDate.toLocaleDateString('en-CA', {timeZone:'Europe/Zurich'});
 
-    const todayContainer = document.getElementById('bookings-today');
-    const tomorrowContainer = document.getElementById('bookings-tomorrow');
+    const todayContainer=document.getElementById('bookings-today');
+    const tomorrowContainer=document.getElementById('bookings-tomorrow');
 
-    todayContainer.innerHTML = '';
-    tomorrowContainer.innerHTML = '';
+    todayContainer.innerHTML=`<h5>Today — ${zurichDateString(todayStr)}</h5>`;
+    tomorrowContainer.innerHTML=`<h5>Tomorrow — ${zurichDateString(tomorrowStr)}</h5>`;
 
-    const todayBookings = list.filter(b => b.day === todayStr)
-                              .sort((a,b) => a.start.localeCompare(b.start));
-    const tomorrowBookings = list.filter(b => b.day === tomorrowStr)
-                                 .sort((a,b) => a.start.localeCompare(b.start));
-
-    function renderBooking(b, container){
-        const card = document.createElement('div'); 
-        card.className = 'card p-2 mb-2 shadow-sm';
-        const partnerText = b.partner ? b.partner : "(no partner)";
-        const bookedTime = b.created_at ? new Date(b.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : 'Unknown';
-        const checkinTime = b.checked_in_at ? ` | Checked in: ${new Date(b.checked_in_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}` : '';
-        const timeText = `(${b.start}–${b.end} — Booked at: ${bookedTime}${checkinTime})`;
-
-        let buttons = '';
-        const isFuture = b.day > todayStr;
-        if(b.status==='booked') buttons += `<button class="btn btn-success btn-sm me-2" ${isFuture ? 'disabled title="Cannot check in for future days"' : `onclick="checkin(${b.booking_id})"`}>Check-in</button>`;
-        if(b.status==='checked-in') buttons += `<button class="btn btn-warning btn-sm me-2" onclick="checkout(${b.booking_id})">Checkout</button>`;
-        {% if is_admin %} buttons += `<button class="btn btn-danger btn-sm" onclick="deleteBooking(${b.booking_id})">Delete</button>`; {% endif %}
-
-        card.innerHTML = `<div><b>${b.player} </b> <i>${timeText}<i> + ${partnerText}</div>
-                          <div>Booked for: ${b.day}</div>
-                          <div>Status: <b>${b.status}</b></div>
-                          <div class="mt-2">${buttons}</div>`;
-        container.appendChild(card);
+    function groupByTime(list, interval=30){
+        const groups={};
+        list.forEach(b=>{
+            const start=new Date("1970-01-01T"+b.start+":00");
+            const key=start.getHours()*60 + start.getMinutes();
+            const rounded=Math.floor(key/interval)*interval;
+            const h=Math.floor(rounded/60).toString().padStart(2,'0');
+            const m=(rounded%60).toString().padStart(2,'0');
+            const label=`${h}:${m}`;
+            if(!groups[label]) groups[label]=[];
+            groups[label].push(b);
+        });
+        return groups;
     }
 
-    if(todayBookings.length > 0){
-        todayContainer.innerHTML = '<h5>Today</h5>';
-        todayBookings.forEach(b => renderBooking(b, todayContainer));
+    function renderGroup(group,label,container){
+        const grpDiv=document.createElement('div');
+        grpDiv.className='mb-2';
+        const header=document.createElement('strong');
+        header.textContent=label + ' slot';
+        grpDiv.appendChild(header);
+        group.forEach(b=>{
+            const card=document.createElement('div');
+            card.className='card p-2 mb-1 shadow-sm';
+            const partnerText=b.partner?b.partner:"(no partner)";
+            const bookedTime=b.created_at?new Date(b.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}):'Unknown';
+            const checkinTime=b.checked_in_at?` | Checked in: ${new Date(b.checked_in_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`:'';
+            const timeText=`(${b.start}–${b.end} — Booked at: ${bookedTime}${checkinTime})`;
+
+            let buttons='';
+            const isFuture=b.day>todayStr;
+            if(b.status==='booked') buttons+=`<button class="btn btn-success btn-sm me-2" ${isFuture?'disabled title="Cannot check in for future days"':`onclick="checkin(${b.booking_id})"`}>Check-in</button>`;
+            if(b.status==='checked-in') buttons+=`<button class="btn btn-warning btn-sm me-2" onclick="checkout(${b.booking_id})">Checkout</button>`;
+            {% if is_admin %} buttons+=`<button class="btn btn-danger btn-sm" onclick="deleteBooking(${b.booking_id})">Delete</button>`; {% endif %}
+
+            card.innerHTML=`<div><b>${b.player} </b> <i>${timeText}<i> + ${partnerText}</div>
+                              <div>Booked for: ${b.day}</div>
+                              <div>Status: <b>${b.status}</b></div>
+                              <div class="mt-1">${buttons}</div>`;
+            grpDiv.appendChild(card);
+        });
+        container.appendChild(grpDiv);
     }
 
-    if(tomorrowBookings.length > 0){
-        tomorrowContainer.innerHTML = '<h5 class="mt-3">Tomorrow</h5>';
-        tomorrowBookings.forEach(b => renderBooking(b, tomorrowContainer));
+    const todayBookings=list.filter(b=>b.day===todayStr).sort((a,b)=>a.start.localeCompare(b.start));
+    const tomorrowBookings=list.filter(b=>b.day===tomorrowStr).sort((a,b)=>a.start.localeCompare(b.start));
+
+    if(todayBookings.length>0){
+        const grouped=groupByTime(todayBookings,30);
+        Object.keys(grouped).sort().forEach(label=>renderGroup(grouped[label],label,todayContainer));
     }
 
-    if(todayBookings.length === 0 && tomorrowBookings.length === 0){
-        todayContainer.innerHTML = "<p class='text-center text-muted'>No bookings yet</p>";
+    if(tomorrowBookings.length>0){
+        const grouped=groupByTime(tomorrowBookings,30);
+        Object.keys(grouped).sort().forEach(label=>renderGroup(grouped[label],label,tomorrowContainer));
+    }
+
+    if(todayBookings.length===0 && tomorrowBookings.length===0){
+        todayContainer.innerHTML="<p class='text-center text-muted'>No bookings yet</p>";
     }
 }
 
-
-
-  async function loadOccupancy(){
+async function loadOccupancy(){
     const res=await fetch('/occupancy?t='+Date.now());
     const j=await res.json();
     const liveOccupied=j.occupied;
@@ -321,31 +292,31 @@ async function loadBookings() {
     } else { matchDayNotice.style.display='none'; matchInfo.style.display='none'; }
 
     populateStartTimes(j);
-    const bookingWarningEl = document.getElementById('bookingWarning') || (()=>{ const form=document.getElementById('bookingForm'); const div=document.createElement('div'); div.id='bookingWarning'; div.className='text-warning fw-bold mb-2'; form.prepend(div); return div; })();
-    bookingWarningEl.textContent = (j.match_start && j.match_end && j.occupied<j.capacity)?`⚠️ Match scheduled for: ${j.match_start} – ${j.match_end}. Slots may fill quickly!`:"";
-    bookingWarningEl.style.display = bookingWarningEl.textContent?"block":"none";
-  }
+    const bookingWarningEl=document.getElementById('bookingWarning')||(()=>{ const form=document.getElementById('bookingForm'); const div=document.createElement('div'); div.id='bookingWarning'; div.className='text-warning fw-bold mb-2'; form.prepend(div); return div; })();
+    bookingWarningEl.textContent=(j.match_start && j.match_end && j.occupied<j.capacity)?`⚠️ Match scheduled for: ${j.match_start} – ${j.match_end}. Slots may fill quickly!`:"";
+    bookingWarningEl.style.display=bookingWarningEl.textContent?"block":"none";
+}
 
-  document.getElementById('bookingForm').addEventListener('submit', async (e)=>{
+document.getElementById('bookingForm').addEventListener('submit', async (e)=>{
     e.preventDefault();
     const player=(playerSelect.value==='other')?playerExternal.value.trim():playerSelect.value;
     if(!player){alert('Please enter player name'); return;}
     let partner=(partnerSelect.value==='other')?partnerExternal.value.trim()||null:partnerSelect.value||null;
-    let partnerToSend = partner || `None-${Date.now()}-${Math.floor(Math.random()*10000)}`;
+    let partnerToSend=partner||`None-${Date.now()}-${Math.floor(Math.random()*10000)}`;
     const fd=new FormData();
     fd.append('player',player); fd.append('partner',partnerToSend);
     fd.append('day',daySelect.value); fd.append('start',startSelect.value); fd.append('end',endSelect.value);
     const resp=await fetch('/book',{method:'POST',body:fd}); const j=await resp.json();
     if(j.ok){ document.getElementById('bookingForm').reset(); playerExternal.style.display='none'; partnerExternal.style.display='none'; await loadBookings(); await loadOccupancy(); new bootstrap.Modal(document.getElementById('userPopup')).show(); }
     else alert(j.error||'Booking failed');
-  });
+});
 
-  window.checkin=async id=>{ await fetch('/checkin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({booking_id:id})}); await loadBookings(); await loadOccupancy(); };
-  window.checkout=async id=>{ await fetch('/checkout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({booking_id:id})}); await loadBookings(); await loadOccupancy(); };
-  window.deleteBooking=async id=>{ await fetch('/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({booking_id:id})}); await loadBookings(); await loadOccupancy(); };
+window.checkin=async id=>{ await fetch('/checkin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({booking_id:id})}); await loadBookings(); await loadOccupancy(); };
+window.checkout=async id=>{ await fetch('/checkout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({booking_id:id})}); await loadBookings(); await loadOccupancy(); };
+window.deleteBooking=async id=>{ await fetch('/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({booking_id:id})}); await loadBookings(); await loadOccupancy(); };
 
-  {% if is_admin %}
-  document.getElementById('save_settings').addEventListener('click', async ()=>{
+{% if is_admin %}
+document.getElementById('save_settings').addEventListener('click', async ()=>{
     const payload={
       match_day:document.getElementById('match_day').checked,
       match_start:document.getElementById('match_start').value||"",
@@ -356,15 +327,15 @@ async function loadBookings() {
     };
     await fetch('/update-settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     await loadOccupancy(); await loadBookings();
-  });
-  {% endif %}
+});
+{% endif %}
 
-  loadBookings(); loadOccupancy();
-  setInterval(loadOccupancy, 5000);
+loadBookings(); loadOccupancy();
+setInterval(loadOccupancy, 5000);
+
 });
 </script>
 
 {% include 'footer.html' %}
 </body>
 </html>
-
