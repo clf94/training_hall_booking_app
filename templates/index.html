@@ -285,16 +285,33 @@ async function loadOccupancy(){
     occupancyValue.textContent=`${liveOccupied} / ${j.capacity}`;
     occupancyValue.className="fs-3 fw-bold "+(liveOccupied<6?"occupancy-green":liveOccupied<11?"occupancy-yellow":"occupancy-red");
 
-    if(j.match_start && j.match_end){
+    if(j.match_start && j.match_end && j.match_day){
       matchDayNotice.style.display='block';
       matchInfo.style.display='block';
       matchInfo.textContent=`Match during the following slot : ${j.match_start} – ${j.match_end}`;
-    } else { matchDayNotice.style.display='none'; matchInfo.style.display='none'; }
+    } else {
+      matchDayNotice.style.display='none';
+      matchInfo.style.display='none';
+    }
 
     populateStartTimes(j);
-    const bookingWarningEl=document.getElementById('bookingWarning')||(()=>{ const form=document.getElementById('bookingForm'); const div=document.createElement('div'); div.id='bookingWarning'; div.className='text-warning fw-bold mb-2'; form.prepend(div); return div; })();
-    bookingWarningEl.textContent=(j.match_start && j.match_end && j.occupied<j.capacity)?`⚠️ Match scheduled for: ${j.match_start} – ${j.match_end}. Slots may fill quickly!`:"";
-    bookingWarningEl.style.display=bookingWarningEl.textContent?"block":"none";
+
+    const bookingWarningEl=document.getElementById('bookingWarning')||(()=>{ 
+      const form=document.getElementById('bookingForm'); 
+      const div=document.createElement('div'); 
+      div.id='bookingWarning'; 
+      div.className='text-warning fw-bold mb-2'; 
+      form.prepend(div); 
+      return div; 
+    })();
+
+    if(j.match_start && j.match_end && j.match_day && j.occupied<j.capacity){
+      bookingWarningEl.textContent=`⚠️ Match scheduled for: ${j.match_start} – ${j.match_end}. Slots may fill quickly!`;
+      bookingWarningEl.style.display='block';
+    } else {
+      bookingWarningEl.textContent='';
+      bookingWarningEl.style.display='none';
+    }
 }
 
 document.getElementById('bookingForm').addEventListener('submit', async (e)=>{
@@ -307,7 +324,12 @@ document.getElementById('bookingForm').addEventListener('submit', async (e)=>{
     fd.append('player',player); fd.append('partner',partnerToSend);
     fd.append('day',daySelect.value); fd.append('start',startSelect.value); fd.append('end',endSelect.value);
     const resp=await fetch('/book',{method:'POST',body:fd}); const j=await resp.json();
-    if(j.ok){ document.getElementById('bookingForm').reset(); playerExternal.style.display='none'; partnerExternal.style.display='none'; await loadBookings(); await loadOccupancy(); new bootstrap.Modal(document.getElementById('userPopup')).show(); }
+    if(j.ok){ 
+      document.getElementById('bookingForm').reset(); 
+      playerExternal.style.display='none'; partnerExternal.style.display='none'; 
+      await loadBookings(); await loadOccupancy(); 
+      new bootstrap.Modal(document.getElementById('userPopup')).show(); 
+    }
     else alert(j.error||'Booking failed');
 });
 
