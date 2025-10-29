@@ -286,8 +286,6 @@ function groupByPeriod(bookings) {
 }
 
 function renderPeriod(bookings, label, container, index) {
-  if (bookings.length === 0) return;
-
   const collapseId = 'collapse-' + label.toLowerCase();
   const isFirst = index === 0; // Only first (Morning) starts open
 
@@ -310,23 +308,54 @@ function renderPeriod(bookings, label, container, index) {
 
   const cardBody = section.querySelector('.card-body');
 
+  if (bookings.length === 0) {
+    cardBody.innerHTML = `<p class="text-center text-muted">No bookings yet</p>`;
+    container.appendChild(section);
+    return;
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0); // normalize to midnight
+
   bookings.forEach(b => {
     const card = document.createElement('div');
     card.className = 'card p-2 mb-2 shadow-sm';
 
-    const bookedTime = b.created_at ? new Date(b.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Unknown';
-    const checkinTime = b.checked_in_at ? ` | Checked in: ${new Date(b.checked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : '';
+    const bookedTime = b.created_at
+      ? new Date(b.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : 'Unknown';
+    const checkinTime = b.checked_in_at
+      ? ` | Checked in: ${new Date(b.checked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+      : '';
     const partnerText = b.partner ? b.partner : "(no partner)";
     const timeText = `(${b.start}–${b.end} — Booked at: ${bookedTime}${checkinTime})`;
 
+    // Convert booking day to Date
+    const bookingDate = new Date(b.day + 'T00:00:00');
+    bookingDate.setHours(0, 0, 0, 0);
+
+    const isFuture = bookingDate > today;
+    const isPast = bookingDate < today;
+
     let buttons = '';
-    const todayStr = dayOptions[0].value;
-    const isFuture = b.day > todayStr;
-    if (b.status === 'booked')
-      buttons += `<button class="btn btn-success btn-sm me-2" ${isFuture ? 'disabled title="Cannot check in for future days"' : `onclick="checkin(${b.booking_id})"`}>Check-in</button>`;
-    if (b.status === 'checked-in')
+
+    if (b.status === 'booked') {
+      if (isFuture) {
+        buttons += `<button class="btn btn-success btn-sm me-2" disabled title="Cannot check in for future days">Check-in</button>`;
+      } else if (isPast) {
+        buttons += `<button class="btn btn-success btn-sm me-2" disabled title="Booking in the past">Check-in</button>`;
+      } else {
+        buttons += `<button class="btn btn-success btn-sm me-2" onclick="checkin(${b.booking_id})">Check-in</button>`;
+      }
+    }
+
+    if (b.status === 'checked-in') {
       buttons += `<button class="btn btn-warning btn-sm me-2" onclick="checkout(${b.booking_id})">Checkout</button>`;
-    {% if is_admin %} buttons += `<button class="btn btn-danger btn-sm" onclick="deleteBooking(${b.booking_id})">Delete</button>`; {% endif %}
+    }
+
+    {% if is_admin %}
+      buttons += `<button class="btn btn-danger btn-sm" onclick="deleteBooking(${b.booking_id})">Delete</button>`;
+    {% endif %}
 
     card.innerHTML = `
       <div><b>${b.player}</b> <i>${timeText}</i> + ${partnerText}</div>
@@ -339,6 +368,7 @@ function renderPeriod(bookings, label, container, index) {
 
   container.appendChild(section);
 }
+
 
 
     const todayBookings=list.filter(b=>b.day===todayStr).sort((a,b)=>a.start.localeCompare(b.start));
@@ -417,9 +447,6 @@ async function loadOccupancy() {
 
     populateStartTimes(j);
 }
-
-
-
 
 
 
