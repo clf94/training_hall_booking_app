@@ -7,6 +7,10 @@
 <link rel="icon" href="/static/logo.png" type="image/png">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 {% include 'styles.html' %}
+<style>
+.disabled-slot { color: #aaa; }
+#bookingWarning { color: red; font-weight: bold; margin-bottom: 0.5rem; }
+</style>
 </head>
 <body class="bg-light">
 
@@ -23,6 +27,7 @@
 {% if is_admin %}
   {% include 'admin_section.html' %}
 {% endif %}
+	  {% include 'booking_rules.html' %}
 
 <div class="container my-4">
   <div class="row justify-content-center">
@@ -39,7 +44,7 @@
 <h3 class="text-center">Bookings</h3>
 <div id="bookings" class="container mb-5">
     <div id="bookings-today"></div>
-    <div id="bookings-tomorrow"></div>
+    <div id="bookings-nextday"></div>
 </div>
 
 {% include 'booking_modal.html' %}
@@ -59,15 +64,37 @@ document.addEventListener('DOMContentLoaded', () => {
   const matchDayNotice = document.getElementById('matchDayNotice');
   const matchInfo = document.getElementById('matchInfo');
 
-  const today = new Date();
-  const tomorrow = new Date();
-  tomorrow.setDate(today.getDate() + 1);
-  const dayOptions = [
-    { label: 'Today', value: today.toISOString().split('T')[0] },
-    { label: 'Tomorrow', value: tomorrow.toISOString().split('T')[0] }
-  ];
-  dayOptions.forEach(o => daySelect.appendChild(new Option(o.label, o.value)));
-  daySelect.value = dayOptions[0].value;
+  const allowedDays = [2, 4, 5]; // Tue=2, Thu=4, Fri=5
+  const weekdays = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+
+function nextAvailableDay(fromDate){
+  let d = new Date(fromDate);
+  while(!allowedDays.includes(d.getDay())){
+    d.setDate(d.getDate() + 1);
+  }
+  return d;
+}
+
+const today = new Date();
+let firstAvailable = nextAvailableDay(today);
+let secondAvailable = nextAvailableDay(new Date(firstAvailable.getTime() + 24*60*60*1000));
+
+const dayOptions = [
+  { 
+    label: firstAvailable.toDateString() === today.toDateString() 
+           ? `${weekdays[firstAvailable.getDay()]} (Today)` 
+           : `${weekdays[firstAvailable.getDay()]}`, 
+    value: firstAvailable.toISOString().split('T')[0] 
+  },
+  { 
+    label: secondAvailable.toDateString() === today.toDateString() 
+           ? `${weekdays[secondAvailable.getDay()]} (Today)` 
+           : `${weekdays[secondAvailable.getDay()]}`, 
+    value: secondAvailable.toISOString().split('T')[0] 
+  }
+];
+dayOptions.forEach(o => daySelect.appendChild(new Option(o.label, o.value)));
+daySelect.value = dayOptions[0].value;
 
   const slots = [];
   const base = new Date(); base.setHours(6,0,0,0);
@@ -88,6 +115,8 @@ document.addEventListener('DOMContentLoaded', () => {
     populatePartners(); 
   });
   partnerSelect.addEventListener('change', ()=>{ partnerExternal.style.display = partnerSelect.value==='other'?'block':'none'; });
+
+  daySelect.addEventListener('change', ()=>populateStartTimes(lastOccupancy));
 
   {% if is_admin %}
   const matchStartSelect = document.getElementById('match_start');
@@ -120,8 +149,8 @@ document.addEventListener('DOMContentLoaded', () => {
     lastOccupancy = occupancy;
     const prevStart = startSelect.value;
     startSelect.innerHTML = '';
-    const todayStr = isoToday();
     const selectedDay = daySelect.value;
+    const isTodaySelected = selectedDay === isoToday();
     const now = nowTime();
     let allDisabled=true;
 
@@ -130,15 +159,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     slots.slice(0, slots.length-1).forEach(t=>{
       const opt = new Option(t,t);
-      if(selectedDay===todayStr && t<=now) { opt.disabled=true; opt.classList.add('disabled-slot'); }
+      if(isTodaySelected && t<=now) opt.disabled=true;
 
-      // Match-day block
       if(occupancy.match_day && occupancy.match_start && occupancy.match_end){
         const inRange = t>=occupancy.match_start && t<occupancy.match_end;
-        if(inRange && occupancy.occupied>=occupancy.capacity) { opt.disabled=true; opt.classList.add('disabled-slot'); }
+        if(inRange && occupancy.occupied>=occupancy.capacity) opt.disabled=true;
       }
 
-      // 1-hour/day limit
       const totalMinutes = currentPlayerBookings.reduce((sum,b)=>{
         const s = parseInt(b.start.split(':')[0])*60 + parseInt(b.start.split(':')[1]);
         const e = parseInt(b.end.split(':')[0])*60 + parseInt(b.end.split(':')[1]);
@@ -170,9 +197,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function updateEnd(){
     endSelect.innerHTML='';
     if(startSelect.selectedIndex===-1) return;
-
     const chosenStart=startSelect.value;
-    const todayStr=isoToday();
     const selectedDay=daySelect.value;
     const now=nowTime();
     let allDisabled=true;
@@ -191,13 +216,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const opt = new Option(t,t);
       const startMinutes = parseInt(chosenStart.split(':')[0])*60 + parseInt(chosenStart.split(':')[1]);
       const endMinutes = parseInt(t.split(':')[0])*60 + parseInt(t.split(':')[1]);
-      if(endMinutes-startMinutes>maxDuration) { opt.disabled=true; opt.classList.add('disabled-slot'); }
-      if(selectedDay===todayStr && t<=now) { opt.disabled=true; opt.classList.add('disabled-slot'); }
+      if(endMinutes-startMinutes>maxDuration) opt.disabled=true;
+      if(selectedDay===isoToday() && t<=now) opt.disabled=true;
 
-      // Match-day block
       if(lastOccupancy && lastOccupancy.match_day && lastOccupancy.match_start && lastOccupancy.match_end){
         const inRange = t>lastOccupancy.match_start && t<=lastOccupancy.match_end;
-        if(inRange && lastOccupancy.occupied>=lastOccupancy.capacity){ opt.disabled=true; opt.classList.add('disabled-slot'); }
+        if(inRange && lastOccupancy.occupied>=lastOccupancy.capacity) opt.disabled=true;
       }
 
       if(!opt.disabled) allDisabled=false;
@@ -241,110 +265,163 @@ document.addEventListener('DOMContentLoaded', () => {
     const list = await res.json();
     updatePlayerBookings(list);
 
-    const todayStr = new Date().toLocaleDateString('en-CA', {timeZone:'Europe/Zurich'});
-    const tomorrowDate = new Date(); tomorrowDate.setDate(tomorrowDate.getDate()+1);
-    const tomorrowStr = tomorrowDate.toLocaleDateString('en-CA', {timeZone:'Europe/Zurich'});
+    const todayStr = dayOptions[0].value;
+    const nextDayStr = dayOptions[1].value;
 
     const todayContainer = document.getElementById('bookings-today');
-    const tomorrowContainer = document.getElementById('bookings-tomorrow');
+    const nextDayContainer = document.getElementById('bookings-nextday');
 
-    todayContainer.innerHTML = `<h5>Today — ${zurichDateString(todayStr)}</h5>`;
-    tomorrowContainer.innerHTML = `<h5>Tomorrow — ${zurichDateString(tomorrowStr)}</h5>`;
+    todayContainer.innerHTML = `<h5>Bookings — ${zurichDateString(todayStr)}</h5>`;
+    nextDayContainer.innerHTML = `<h5>Bookings — ${zurichDateString(nextDayStr)}</h5>`;
 
-    function groupByPeriod(list){
-      const periods = { "Morning 06:00-12:00": [], "Afternoon 12:00-18:00": [], "Evening 18:00-00:00": [] };
-      list.forEach(b=>{
-        const h=parseInt(b.start.split(':')[0]);
-        if(h>=6 && h<12) periods["Morning 06:00-12:00"].push(b);
-        else if(h>=12 && h<18) periods["Afternoon 12:00-18:00"].push(b);
-        else periods["Evening 18:00-00:00"].push(b);
-      });
-      return periods;
-    }
+function groupByPeriod(bookings) {
+  const grouped = { Morning: [], Afternoon: [], Evening: [] };
+  bookings.forEach(b => {
+    const hour = parseInt(b.start.split(':')[0]);
+    if (hour < 12) grouped.Morning.push(b);
+    else if (hour < 18) grouped.Afternoon.push(b);
+    else grouped.Evening.push(b);
+  });
+  return grouped;
+}
 
-function renderPeriod(periodBookings, label, container) {
-    if (periodBookings.length === 0) return;
-    const grpDiv = document.createElement('div');
-    grpDiv.className = 'mb-3';
-    const header = document.createElement('strong');
-    header.textContent = label;
-    grpDiv.appendChild(header);
+function renderPeriod(bookings, label, container, index) {
+  if (bookings.length === 0) return;
 
-    // Calculate total booked time per player
-    const totalTimePerPlayer = {};
-    periodBookings.forEach(b => {
-        if (!totalTimePerPlayer[b.player]) totalTimePerPlayer[b.player] = 0;
-        const s = parseInt(b.start.split(':')[0]) * 60 + parseInt(b.start.split(':')[1]);
-        const e = parseInt(b.end.split(':')[0]) * 60 + parseInt(b.end.split(':')[1]);
-        totalTimePerPlayer[b.player] += e - s;
-    });
+  const collapseId = 'collapse-' + label.toLowerCase();
+  const isFirst = index === 0; // Only first (Morning) starts open
 
-    periodBookings.forEach(b => {
-        const card = document.createElement('div');
-        card.className = 'card p-2 mb-1 shadow-sm';
+  const section = document.createElement('div');
+  section.className = 'mb-3';
+  const icons = { Morning: "🌅", Afternoon: "🌞", Evening: "🌙" };
+  section.innerHTML = `
+    <button class="btn btn-outline-primary w-100 text-start mb-2" 
+            type="button" 
+            data-bs-toggle="collapse" 
+            data-bs-target="#${collapseId}" 
+            aria-expanded="${isFirst}" 
+            aria-controls="${collapseId}">
+       ${icons[label]} ${label}
+    </button>
+    <div class="collapse ${isFirst ? 'show' : ''}" id="${collapseId}">
+      <div class="card card-body p-2"></div>
+    </div>
+  `;
 
-        const bookedTime = b.created_at ? new Date(b.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Unknown';
-        const checkinTime = b.checked_in_at ? ` | Checked in: ${new Date(b.checked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : '';
-        const timeText = `(${b.start}–${b.end} — Booked at: ${bookedTime}${checkinTime})`;
-        const partnerText = b.partner ? b.partner : "(no partner)";
+  const cardBody = section.querySelector('.card-body');
 
-        // Highlight if player reached 1 hour
-        const playerTotal = totalTimePerPlayer[b.player];
-        const totalDisplay = `${Math.floor(playerTotal / 60)}h ${playerTotal % 60}m`;
-        const totalClass = playerTotal >= 60 ? 'text-danger fw-bold' : 'text-muted';
+  bookings.forEach(b => {
+    const card = document.createElement('div');
+    card.className = 'card p-2 mb-2 shadow-sm';
 
-        let buttons = '';
-        const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Zurich' });
-        const isFuture = b.day > todayStr;
-        if (b.status === 'booked') buttons += `<button class="btn btn-success btn-sm me-2" ${isFuture ? 'disabled title="Cannot check in for future days"' : `onclick="checkin(${b.booking_id})"`}>Check-in</button>`;
-        if (b.status === 'checked-in') buttons += `<button class="btn btn-warning btn-sm me-2" onclick="checkout(${b.booking_id})">Checkout</button>`;
-        {% if is_admin %} buttons += `<button class="btn btn-danger btn-sm" onclick="deleteBooking(${b.booking_id})">Delete</button>`; {% endif %}
+    const bookedTime = b.created_at ? new Date(b.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Unknown';
+    const checkinTime = b.checked_in_at ? ` | Checked in: ${new Date(b.checked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : '';
+    const partnerText = b.partner ? b.partner : "(no partner)";
+    const timeText = `(${b.start}–${b.end} — Booked at: ${bookedTime}${checkinTime})`;
 
-        card.innerHTML = `
-            <div><b>${b.player}</b> <i>${timeText}</i> + ${partnerText}</div>
-            <div>Total booked today: <span class="${totalClass}">${totalDisplay}</span></div>
-            <div>Booked for: ${b.day}</div>
-            <div>Status: <b>${b.status}</b></div>
-            <div class="mt-1">${buttons}</div>
-        `;
-        grpDiv.appendChild(card);
-    });
+    let buttons = '';
+    const todayStr = dayOptions[0].value;
+    const isFuture = b.day > todayStr;
+    if (b.status === 'booked')
+      buttons += `<button class="btn btn-success btn-sm me-2" ${isFuture ? 'disabled title="Cannot check in for future days"' : `onclick="checkin(${b.booking_id})"`}>Check-in</button>`;
+    if (b.status === 'checked-in')
+      buttons += `<button class="btn btn-warning btn-sm me-2" onclick="checkout(${b.booking_id})">Checkout</button>`;
+    {% if is_admin %} buttons += `<button class="btn btn-danger btn-sm" onclick="deleteBooking(${b.booking_id})">Delete</button>`; {% endif %}
 
-    container.appendChild(grpDiv);
+    card.innerHTML = `
+      <div><b>${b.player}</b> <i>${timeText}</i> + ${partnerText}</div>
+      <div>Booked for: ${b.day}</div>
+      <div>Status: <b>${b.status}</b></div>
+      <div class="mt-1">${buttons}</div>
+    `;
+    cardBody.appendChild(card);
+  });
+
+  container.appendChild(section);
 }
 
 
     const todayBookings=list.filter(b=>b.day===todayStr).sort((a,b)=>a.start.localeCompare(b.start));
-    const tomorrowBookings=list.filter(b=>b.day===tomorrowStr).sort((a,b)=>a.start.localeCompare(b.start));
+    const nextBookings=list.filter(b=>b.day===nextDayStr).sort((a,b)=>a.start.localeCompare(b.start));
 
-    const groupedToday = groupByPeriod(todayBookings);
-    Object.keys(groupedToday).forEach(label=>renderPeriod(groupedToday[label],label,todayContainer));
+   const groupedToday = groupByPeriod(todayBookings);
+['Morning', 'Afternoon', 'Evening'].forEach((p, i) => renderPeriod(groupedToday[p], p, todayContainer, i));
 
-    const groupedTomorrow = groupByPeriod(tomorrowBookings);
-    Object.keys(groupedTomorrow).forEach(label=>renderPeriod(groupedTomorrow[label],label,tomorrowContainer));
+const groupedNext = groupByPeriod(nextBookings);
+['Morning', 'Afternoon', 'Evening'].forEach((p, i) => renderPeriod(groupedNext[p], p, nextDayContainer, i));
 
-    if(todayBookings.length===0 && tomorrowBookings.length===0){
+    if(todayBookings.length===0 && nextBookings.length===0){
       todayContainer.innerHTML="<p class='text-center text-muted'>No bookings yet</p>";
+      nextDayContainer.innerHTML="<p class='text-center text-muted'>No bookings yet</p>";
     }
   }
+async function loadOccupancy() {
+    const res = await fetch('/occupancy?t=' + Date.now());
+    const j = await res.json();
 
-  async function loadOccupancy(){
-    const res=await fetch('/occupancy?t='+Date.now());
-    const j=await res.json();
-    occupancyValue.textContent=`${j.occupied} / ${j.capacity}`;
-    occupancyValue.className="fs-3 fw-bold "+(j.occupied<6?"occupancy-green":j.occupied<11?"occupancy-yellow":"occupancy-red");
+    // Update occupancy display
+    occupancyValue.textContent = `${j.occupied} / ${j.capacity}`;
+    occupancyValue.className =
+        "fs-3 fw-bold " +
+        (j.occupied < 6 ? "occupancy-green" :
+         j.occupied < 11 ? "occupancy-yellow" : "occupancy-red");
 
-    if(j.match_start && j.match_end && j.match_day){
-      matchDayNotice.style.display='block';
-      matchInfo.style.display='block';
-      matchInfo.textContent=`Match during the following slot : ${j.match_start} – ${j.match_end}`;
+    const tablesReserved = Math.ceil(j.occupied / 2);
+    const matchWarning = document.getElementById('matchWarning');
+
+    // Make sure the warning div exists
+    if (!matchWarning) {
+        console.warn("⚠️ matchWarning element not found in DOM.");
+        return;
+    }
+
+    // If there is a match today
+    if (j.match_day && j.match_start && j.match_end) {
+        const now = new Date();
+        const nowMinutes = now.getHours() * 60 + now.getMinutes();
+        const matchStartMinutes = parseInt(j.match_start.split(':')[0]) * 60 + parseInt(j.match_start.split(':')[1]);
+        const matchEndMinutes = parseInt(j.match_end.split(':')[0]) * 60 + parseInt(j.match_end.split(':')[1]);
+
+        let whenText = '';
+        let warningText = '';
+
+        if (nowMinutes >= matchStartMinutes && nowMinutes <= matchEndMinutes) {
+            // 🟥 Match ongoing
+            whenText = 'ongoing';
+            if (j.occupied >= j.capacity) {
+                warningText = `⚠️ Match ongoing (${j.match_start} – ${j.match_end}). All tables are currently full. Bookings are disabled.`;
+            } else {
+                warningText = `⚠️ Match ongoing (${j.match_start} – ${j.match_end}). Tables reserved: ${tablesReserved}. Please book carefully.`;
+            }
+            matchWarning.className = "alert alert-danger fw-bold text-center";
+        } else if (nowMinutes < matchStartMinutes) {
+            // 🟨 Match upcoming
+            whenText = 'upcoming';
+            warningText = `⚠️ Upcoming match today (${j.match_start} – ${j.match_end}). Tables reserved: ${tablesReserved}. Please plan your bookings carefully.`;
+            matchWarning.className = "alert alert-warning fw-bold text-center";
+        } else {
+            // 🟩 Match finished
+            whenText = 'finished';
+            warningText = `✅ Match finished (${j.match_start} – ${j.match_end}). You can book freely now.`;
+            matchWarning.className = "alert alert-success fw-bold text-center";
+        }
+
+        // Always display the banner
+        matchWarning.style.display = 'block';
+        matchWarning.textContent = warningText;
+
     } else {
-      matchDayNotice.style.display='none';
-      matchInfo.style.display='none';
+        // No match scheduled
+        matchWarning.style.display = 'none';
     }
 
     populateStartTimes(j);
-  }
+}
+
+
+
+
+
 
   document.getElementById('bookingForm').addEventListener('submit', async (e)=>{
     e.preventDefault();
