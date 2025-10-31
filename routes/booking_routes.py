@@ -30,47 +30,6 @@ def bookings_route():
         })
     return jsonify(data)
 
-@booking_bp.route("/occupancy")
-def occupancy_route():
-    today_iso = date.today().isoformat()
-    bookings = Booking.query.filter_by(day=today_iso, status="checked-in").all()
-    occupied = 0
-    for b in bookings:
-        occupied += 2 if b.partner and not b.partner.startswith("None-") else 1
-
-    settings = Settings.query.first()
-    match_day_flag = False
-    match_start = settings.match_start if settings else ""
-    match_end = settings.match_end if settings else ""
-    extra_table_flag = False
-    second_match_flag = False
-    second_match_extra_table_flag = False
-
-    now_time = zurich_now().time()
-    if settings and settings.match_day and settings.match_start and settings.match_end:
-        m_start = parse_hm_to_timeobj(settings.match_start)
-        m_end = parse_hm_to_timeobj(settings.match_end)
-        if time_in_range(m_start, m_end, now_time):
-            match_day_flag = settings.match_day
-            extra_table_flag = settings.extra_table
-            second_match_flag = settings.second_match
-            second_match_extra_table_flag = settings.second_match_extra_table
-
-            if settings.match_day: occupied += 4
-            if settings.extra_table: occupied += 2
-            if settings.second_match: occupied += 4
-            if settings.second_match_extra_table: occupied += 2
-
-    return jsonify({
-        "occupied": occupied,
-        "capacity": 12,
-        "match_day": match_day_flag,
-        "match_start": match_start,
-        "match_end": match_end,
-        "extra_table": extra_table_flag,
-        "second_match": second_match_flag,
-        "second_match_extra_table": second_match_extra_table_flag
-    })
 
 @booking_bp.route("/book", methods=["POST"])
 def book_route():
@@ -78,6 +37,10 @@ def book_route():
         player = request.form.get("player", "").strip()
         if not player:
             return jsonify({"ok": False, "error": "Player missing."})
+        if player == "other":
+            player = request.form.get("player_external", "").strip()
+            if not player:
+                return jsonify({"ok": False, "error": "Please enter player name."})
 
         partner = request.form.get("partner")
         if partner == "other":
@@ -91,30 +54,31 @@ def book_route():
         if not day or not start or not end:
             return jsonify({"ok": False, "error": "Missing date/time."})
 
-        # Convert to datetime
-        booking_start = datetime.strptime(f"{day} {start}", "%Y-%m-%d %H:%M")
-        booking_end = datetime.strptime(f"{day} {end}", "%Y-%m-%d %H:%M")
-        booking_time = booking_start.replace(tzinfo=ZURICH_TZ)
+        # -------------------------------
+        # ALLOWED DAYS CHECK
+        # -------------------------------
+        from datetime import datetime
+        ALLOWED_DAYS = ["Tuesday", "Thursday", "Friday"]
+        booking_date = datetime.strptime(day, "%Y-%m-%d").date()
+        booking_weekday = booking_date.strftime("%A")
+        if booking_weekday not in ALLOWED_DAYS:
+            return jsonify({
+                "ok": False,
+                "error": f"Bookings are only allowed on {', '.join(ALLOWED_DAYS)}."
+            })
+
+        # -------------------------------
+        # Check if booking is in the past
+        # -------------------------------
+        booking_time_naive = datetime.strptime(f"{day} {start}", "%Y-%m-%d %H:%M")
+        booking_time = booking_time_naive.replace(tzinfo=ZURICH_TZ)
         now = zurich_now()
         if booking_time < now:
             return jsonify({"ok": False, "error": "Cannot book past slots."})
 
-        # Check existing bookings for this player on that day
-        player_bookings = Booking.query.filter(
-            Booking.day == day,
-            or_(Booking.player == player, Booking.partner == player)
-        ).all()
-
-        booked_minutes = sum(
-            (datetime.strptime(b.end, "%H:%M") - datetime.strptime(b.start, "%H:%M")).seconds // 60
-            for b in player_bookings
-        )
-
-        new_booking_minutes = (booking_end - booking_start).seconds // 60
-        if booked_minutes + new_booking_minutes > 60:
-            return jsonify({"ok": False, "error": "Booking exceeds 1 hour limit per day for this player."})
-
-        # Conflict check for overlapping slots
+        # -------------------------------
+        # Conflict check
+        # -------------------------------
         conflict_query = Booking.query.filter(
             Booking.day == day,
             or_(
@@ -132,7 +96,9 @@ def book_route():
         if conflict_query.first():
             return jsonify({"ok": False, "error": "Player or partner already booked in this slot."})
 
-        # Save booking
+        # -------------------------------
+        # Create booking
+        # -------------------------------
         new_booking = Booking(player=player, partner=partner, day=day, start=start, end=end)
         db.session.add(new_booking)
         db.session.commit()
@@ -142,7 +108,6 @@ def book_route():
     except Exception as e:
         print("Booking error:", e)
         return jsonify({"ok": False, "error": "Server error. Check input."})
-
 
 @booking_bp.route("/checkin", methods=["POST"])
 def checkin_route():
@@ -176,17 +141,3 @@ def delete_booking_route():
         return jsonify({"ok": True})
     return jsonify({"ok": False, "error": "Not authorized or booking missing"}), 401
 
-@booking_bp.route("/update-settings", methods=["POST"])
-def update_settings_route():
-    if not session.get("is_admin"):
-        return "Unauthorized", 401
-    payload = request.json
-    s = Settings.query.first()
-    s.match_day = payload.get("match_day", False)
-    s.extra_table = payload.get("extra_table", False)
-    s.second_match = payload.get("second_match", False)
-    s.second_match_extra_table = payload.get("second_match_extra_table", False)
-    s.match_start = payload.get("match_start", "")
-    s.match_end = payload.get("match_end", "")
-    db.session.commit()
-    return jsonify({"ok": True})

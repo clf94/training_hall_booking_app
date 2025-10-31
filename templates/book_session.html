@@ -1,43 +1,48 @@
-  <div class="card p-3 shadow-sm">
-    <h5 class="mb-3">Book a Session</h5>
-<div id="matchWarning" class="alert alert-warning fw-bold text-center" style="display:none;"></div>
-
+<div class="card">
+  <div class="card-header-custom">
+    <h5>🎯 Book a Session</h5>
+  </div>
+  <div class="card-body">
     <form id="bookingForm">
-      <div class="mb-2">
-        <label class="form-label">Player</label>
+      <div class="mb-3">
+        <label class="form-label">👤 Player</label>
         <select id="player" name="player" class="form-select" required>
           <option value="">-- Select player --</option>
           {% for u in users %}<option value="{{ u }}">{{ u }}</option>{% endfor %}
-          <option value="other">Other</option>
+          <option value="other">Other (Guest)</option>
         </select>
-        <input type="text" id="player_external" placeholder="Enter player name" class="form-control mt-1" style="display:none;" />
-      </div>
-
-      <div class="mb-2">
-        <label class="form-label">Partner</label>
-        <select id="partner" name="partner" class="form-select">
-          <option value="">-- None --</option>
-          {% for u in users %}<option value="{{ u }}">{{ u }}</option>{% endfor %}
-          <option value="other">Other</option>
-        </select>
-        <input type="text" id="partner_external" placeholder="Enter partner name" class="form-control mt-1" style="display:none;" />
-      </div>
-
-      <div class="mb-2">
-        <label class="form-label">Day</label>
-        <select id="day" name="day" class="form-select" required></select>
-      </div>
-
-      <div class="mb-2">
-        <label class="form-label">Start Time</label>
-        <select id="start" name="start" class="form-select" required></select>
+        <input type="text" id="player_external" placeholder="Enter player name" class="form-control mt-2" style="display:none;" />
       </div>
 
       <div class="mb-3">
-        <label class="form-label">End Time</label>
-        <select id="end" name="end" class="form-select" required></select>
+        <label class="form-label">👥 Partner (Optional)</label>
+        <select id="partner" name="partner" class="form-select">
+          <option value="">-- None --</option>
+          {% for u in users %}<option value="{{ u }}">{{ u }}</option>{% endfor %}
+          <option value="other">Other (Guest)</option>
+        </select>
+        <input type="text" id="partner_external" placeholder="Enter partner name" class="form-control mt-2" style="display:none;" />
       </div>
 
-      <button type="submit" id="submitBtn" class="btn btn-primary w-100">Book</button>
+      <div class="mb-3">
+        <label class="form-label">📅 Day</label>
+        <select id="day" name="day" class="form-select" required></select>
+      </div>
+
+      <div class="row g-3 mb-3">
+        <div class="col-6">
+          <label class="form-label">🕐 Start Time</label>
+          <select id="start" name="start" class="form-select" required></select>
+        </div>
+        <div class="col-6">
+          <label class="form-label">🕐 End Time</label>
+          <select id="end" name="end" class="form-select" required></select>
+        </div>
+      </div>
+
+      <button type="submit" id="submitBtn" class="btn btn-primary w-100">
+        ✅ Confirm Booking
+      </button>
     </form>
+  </div>
 </div>

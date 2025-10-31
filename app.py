@@ -7,6 +7,8 @@ from models import Settings
 from routes.main_routes import main_bp
 from routes.admin_routes import admin_bp
 from routes.booking_routes import booking_bp
+from routes.settings_routes import settings_bp
+from routes.occupancy_routes import occupancy_bp
 from scheduler import start_scheduler
 
 load_dotenv()
@@ -21,6 +23,8 @@ db.init_app(app)
 app.register_blueprint(main_bp)
 app.register_blueprint(admin_bp)
 app.register_blueprint(booking_bp)
+app.register_blueprint(settings_bp)
+app.register_blueprint(occupancy_bp)
 
 @app.before_request
 def load_settings():
@@ -31,6 +35,7 @@ def load_settings():
 
 if __name__ == "__main__":
     with app.app_context():
+        db.drop_all()
         db.create_all()
         start_scheduler(app)
     app.run(host="0.0.0.0", port=5009, debug=True)

@@ -1,38 +1,54 @@
-<div class="container admin-section">
-  <div class="card p-3 shadow-sm">
-    <h5>Admin Section</h5>
-    <div class="form-check mb-2">
-      <input type="checkbox" class="form-check-input" id="match_day" {% if match_day %}checked{% endif %}>
-      <label class="form-check-label" for="match_day">Match Day (2 tables)</label>
+<div class="card admin-section">
+  <div class="card-header-custom">
+    <h5>⚙️ Admin Settings</h5>
+  </div>
+  <div class="card-body">
+    <div class="form-check mb-3">
+      <input type="checkbox" class="form-check-input" id="event_day" {% if event_day %}checked{% endif %}>
+      <label class="form-check-label" for="event_day">
+        <strong>Event/Match Day</strong> (reserves 2 tables)
+      </label>
     </div>
-    <div id="match_range" style="display: {% if match_day %}block{% else %}none{% endif %};">
-      <div class="row g-2">
-        <div class="col">
-          <label class="form-label">Match Start</label>
-          <select id="match_start" class="form-select"></select>
+    
+    <div id="event_range" style="display: {% if event_day %}block{% else %}none{% endif %};">
+      <div class="mb-3">
+        <label for="event_name" class="form-label">📌 Event Name</label>
+        <input type="text" id="event_name" class="form-control" 
+               placeholder="e.g., League Match, Training Session, Tournament" 
+               value="{{ event_name or 'Match' }}" maxlength="50">
+        <small class="text-muted">This will be displayed in the banner</small>
+      </div>
+
+      <div class="row g-3 mb-3">
+        <div class="col-md-6">
+          <label for="event_start" class="form-label">🕐 Event Start</label>
+          <select id="event_start" class="form-select"></select>
         </div>
-        <div class="col">
-          <label class="form-label">Match End</label>
-          <select id="match_end" class="form-select"></select>
+        <div class="col-md-6">
+          <label for="event_end" class="form-label">🕐 Event End</label>
+          <select id="event_end" class="form-select"></select>
         </div>
       </div>
+
     </div>
 
-    <div class="form-check mb-2 mt-3">
+    <hr class="my-3">
+
+    <div class="form-check mb-2">
       <input type="checkbox" class="form-check-input" id="extra_table" {% if extra_table %}checked{% endif %}>
-      <label class="form-check-label" for="extra_table">Extra Table</label>
+      <label class="form-check-label" for="extra_table">Extra Table Available</label>
     </div>
-
     <div class="form-check mb-2">
-      <input type="checkbox" class="form-check-input" id="second_match" {% if second_match %}checked{% endif %}>
-      <label class="form-check-label" for="second_match">Second Match (2 tables)</label>
+      <input type="checkbox" class="form-check-input" id="second_event" {% if second_event %}checked{% endif %}>
+      <label class="form-check-label" for="second_event">Second Event (2 tables)</label>
+    </div>
+    <div class="form-check mb-3">
+      <input type="checkbox" class="form-check-input" id="second_event_extra_table" {% if second_event_extra_table %}checked{% endif %}>
+      <label class="form-check-label" for="second_event_extra_table">Extra Table for Second Event</label>
     </div>
 
-    <div class="form-check mb-2">
-      <input type="checkbox" class="form-check-input" id="second_match_extra_table" {% if second_match_extra_table %}checked{% endif %}>
-      <label class="form-check-label" for="second_match_extra_table">Extra Table for Second Match</label>
-    </div>
-
-    <button id="save_settings" class="btn btn-primary mt-2 w-100">Save Settings</button>
+    <button id="save_settings" class="btn btn-primary w-100">
+      💾 Save Settings
+    </button>
   </div>
 </div>

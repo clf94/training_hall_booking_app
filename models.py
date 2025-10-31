@@ -15,9 +15,16 @@ class Booking(db.Model):
 
 class Settings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    match_day = db.Column(db.Boolean, default=False)
+    
+    # Event/Match settings (renamed for generalization)
+    event_day = db.Column(db.Boolean, default=False)
+    event_name = db.Column(db.String(50), default="Match")
+    event_start = db.Column(db.String(5), nullable=True)
+    event_end = db.Column(db.String(5), nullable=True)
+    
+    # Table configuration
     extra_table = db.Column(db.Boolean, default=False)
-    second_match = db.Column(db.Boolean, default=False)
-    second_match_extra_table = db.Column(db.Boolean, default=False)
-    match_start = db.Column(db.String(5), nullable=True)
-    match_end = db.Column(db.String(5), nullable=True)
+    second_event = db.Column(db.Boolean, default=False)
+    second_event_extra_table = db.Column(db.Boolean, default=False)
+    
+ 

@@ -1,0 +1,13 @@
+<div class="header-section">
+  <img src="/static/logo.png" class="logo" alt="TTC Zürich Affoltern Logo">
+  <h1>🏓 Tischtennisclub Zürich Affoltern</h1>
+  {% if not is_admin %}
+    <a href="{{ url_for('admin.admin_login') }}" class="btn btn-warning mt-2">
+      🔐 Admin Login
+    </a>
+  {% else %}
+    <a href="{{ url_for('admin.admin_logout') }}" class="btn btn-danger mt-2">
+      🚪 Admin Logout
+    </a>
+  {% endif %}
+</div>
