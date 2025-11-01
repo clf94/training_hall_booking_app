@@ -32,6 +32,12 @@ def load_settings():
     if Settings.query.first() is None:
         db.session.add(Settings())
         db.session.commit()
+        
+def load_users():
+    users_file = os.path.join(os.path.dirname(__file__), "users.json")
+    with open(users_file, "r", encoding="utf-8") as f:
+        users = json.load(f)
+    return sorted(users)         
 
 if __name__ == "__main__":
     with app.app_context():

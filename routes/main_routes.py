@@ -3,12 +3,28 @@ from models import Settings
 import os
 
 main_bp = Blueprint("main_bp", __name__)
+import json
 
-USERS = os.getenv("USERS", "").split(",")
+def load_users():
+    """Load users from users.json file"""
+    users_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "users.json")
+    try:
+        with open(users_file, "r", encoding="utf-8") as f:
+            users = json.load(f)
+        return sorted(users)
+    except FileNotFoundError:
+        print("⚠️ users.json not found. Using default empty list.")
+        return []
+    except json.JSONDecodeError:
+        print("⚠️ users.json is invalid JSON. Using default empty list.")
+        return []
 
 @main_bp.route("/")
 def index():
     settings = Settings.query.first()
+    
+     # Load users from JSON file
+    users = load_users()
     
     # Default values
     event_day = False
@@ -31,7 +47,7 @@ def index():
     
     return render_template(
         "index.html",
-        users=USERS,
+        users=users,
         is_admin=session.get("is_admin", False),
         event_day=event_day,
         event_name=event_name,
